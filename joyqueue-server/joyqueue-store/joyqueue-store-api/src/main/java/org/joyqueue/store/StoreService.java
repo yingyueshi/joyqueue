@@ -15,11 +15,12 @@
  */
 package org.joyqueue.store;
 
+import org.joyqueue.domain.QosLevel;
 import org.joyqueue.monitor.BufferPoolMonitorInfo;
+import org.joyqueue.store.replication.ReplicableStore;
 import org.joyqueue.store.transaction.TransactionStore;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.List;
 
 
@@ -27,6 +28,22 @@ import java.util.List;
  * Broker 存储元数据服务
  */
 public interface StoreService {
+    /**
+     * Partition group 是否存在。
+     * 以Store内存中的元数据为准，有可能和磁盘上的文件不一致。
+     * @param topic Topic
+     * @param partitionGroup Partition group
+     * @return 存在返回true， 否则返回false
+     */
+    boolean partitionGroupExists(String topic, int partitionGroup);
+
+    /**
+     * Topic 是否存在
+     * 以Store内存中的元数据为准，有可能和磁盘上的文件不一致。
+     * @param topic Topic
+     * @return 存在返回true， 否则返回false
+     */
+    boolean topicExists(String topic);
 
     /**
      * 获取事务消息使用的{@link TransactionStore}
@@ -34,7 +51,7 @@ public interface StoreService {
      * 如果Topic存在，{@link TransactionStore}目录文件不存在则自动创建 {@link TransactionStore}；
      * 如果Topic不存在，返回null。
      */
-    TransactionStore getTransactionStore(String topic, short partition);
+    TransactionStore getTransactionStore(String topic);
 
     /**
      * 获取全部{@link TransactionStore}
@@ -43,7 +60,7 @@ public interface StoreService {
     List<TransactionStore> getAllTransactionStores();
 
     /**
-     * 删除Partition group。
+     * 删除Partition group。此操作不会物理上删除Partition group所在的目录，而是将数据重名为“.d.[PartitionGroup]”。
      * @param topic Topic
      * @param partitionGroup Partition group
      */
@@ -52,7 +69,7 @@ public interface StoreService {
     /**
      * 从磁盘恢复partition group，系统启动时调用
      */
-    PartitionGroupStore restoreOrCreatePartitionGroup(String topic, int partitionGroup, short[] partitions, List<Integer> brokers, int thisBrokerId);
+    void restorePartitionGroup(String topic, int partitionGroup);
 
     /**
      * 创建PartitionGroup。仅当topic创建或者向topic中添加partitionGroup的时候调用，需要提供节点信息。
@@ -60,31 +77,28 @@ public interface StoreService {
      * @param topic Topic
      * @param partitionGroup Partition group
      * @param partitions Partition
-     * @param brokers 所有副本（包含本节点）的BrokerId
-     * @param thisBrokerId 本节点的BrokerId
-     * @return See {@link PartitionGroupStore}
      */
-    PartitionGroupStore createPartitionGroup(String topic, int partitionGroup, short[] partitions, List<Integer> brokers, int thisBrokerId);
+    void createPartitionGroup(String topic, int partitionGroup, short[] partitions);
 
     /**
-     * 停止Partition group
+     * 获取{@link PartitionGroupStore} 实例
      * @param topic Topic
      * @param partitionGroup Partition group
+     * @param writeQosLevel 写入Qos级别
+     * @return {@link PartitionGroupStore} 实例，不存在时返回null。
      */
-    void stopPartitionGroup(String topic, int partitionGroup);
+    PartitionGroupStore getStore(String topic, int partitionGroup, QosLevel writeQosLevel);
+
     /**
-     * 获取{@link PartitionGroupStore} 实例
+     * 获取{@link PartitionGroupStore} 实例，使用默认的Qos级别
+     * @see QosLevel#REPLICATION。
+     * @see #getStore(java.lang.String, int, QosLevel)
      * @param topic Topic
      * @param partitionGroup Partition group
      * @return {@link PartitionGroupStore} 实例，不存在时返回null。
      */
     PartitionGroupStore getStore(String topic, int partitionGroup);
 
-    /**
-     * 获取全部的Store
-     * @return 所有store的集合
-     */
-    Collection<PartitionGroupStore> getAllStores();
     /**
      * 获取指定 {@code topic} 下的全部 {@link PartitionGroupStore} 实例列表。
      * @param topic Topic
@@ -93,20 +107,25 @@ public interface StoreService {
     List<PartitionGroupStore> getStore(String topic);
 
     /**
-     * 如果当前节点是Leader，变更Partition group中的Partition
+     * 变更Partition group中的Partition
      * @throws NoSuchPartitionGroupException PartitionGroup不存在时抛出此异常
      * @throws IOException 创建/删除Partition时读写文件异常时抛出
      * @param topic Topic
      * @param partitionGroup Partition group
      * @param partitions 变更后的Partition数组
      */
-    void maybeRePartition(String topic, int partitionGroup, Collection<Short> partitions) throws IOException;
+    void rePartition(String topic, int partitionGroup, Short[] partitions) throws IOException;
 
     /**
-     * 如果当前节点是Leader，执行配置变更
-     * @param newBrokerIds 变更后的新配置
+     * 获取{@link ReplicableStore} 实例
+     * @see QosLevel#REPLICATION。
+     * @see #getStore(java.lang.String, int, QosLevel)
+     * @param topic Topic
+     * @param partitionGroup Partition group
+     * @return {@link ReplicableStore} 实例，不存在时返回null。
      */
-    void maybeUpdateConfig(String topic, int partitionGroup, Collection<Integer> newBrokerIds);
+
+    ReplicableStore getReplicableStore(String topic, int partitionGroup);
 
     /**
      * 获取管理接口 {@link StoreManagementService} 实例
@@ -120,5 +139,4 @@ public interface StoreService {
      */
     BufferPoolMonitorInfo monitorInfo();
 
-    List<TransactionStore> getTransactionStores(String topic);
 }

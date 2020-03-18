@@ -15,18 +15,16 @@
  */
 package org.joyqueue.store;
 
-import org.joyqueue.domain.QosLevel;
 import org.joyqueue.toolkit.concurrent.EventListener;
 
 import java.io.IOException;
-import java.util.concurrent.CompletableFuture;
+import java.util.Map;
+import java.util.concurrent.Future;
 
 /**
  * Partition group存储，每个Partition group属于唯一的一个Topic，在Topic范围内拥有唯一的序号，包含多个Partition。
  */
 public interface PartitionGroupStore {
-    boolean isInitialized();
-
     /**
      * 获取Topic
      * @return Topic
@@ -45,6 +43,21 @@ public interface PartitionGroupStore {
      */
     Short[] listPartitions();
 
+    /**
+     * 获取当前PartitionGroup占用的磁盘空间大小
+     * @return 当前PartitionGroup占用的磁盘空间大小，单位Byte
+     */
+    long getTotalPhysicalStorageSize();
+
+    /**
+     * @param time  delete oldest index file of partition if
+     *              exist at least two consumed index file and it's oldest message time < time,
+     *              force clean oldest consumed index file when time < 0
+     * @param partitionAckMap  partition consume ack offsets
+     * @param keepUnconsumed  do not delete unconsumed
+     * @return  release storage size
+     **/
+    long clean(long time, Map<Short, Long> partitionAckMap, boolean keepUnconsumed) throws IOException;
 
     /**
      * 获取分区当前的最小索引，用于初始化消费
@@ -62,8 +75,10 @@ public interface PartitionGroupStore {
 
     /**
      * 根据消息存储时间获取索引。
-     * 如果找到，返回最后一条 “存储时间 <= timestamp” 消息的索引。
+     * 如果找到，返回最后一条 “存储时间 不大于 timestamp” 消息的索引。
      * 如果找不到，返回负值。
+     * @param partition 分区
+     * @param timestamp 时间戳
      */
     long getIndex(short partition, long timestamp);
 
@@ -75,7 +90,7 @@ public interface PartitionGroupStore {
      * @see WriteResult
      * @see WriteRequest
      */
-    CompletableFuture<WriteResult> asyncWrite(QosLevel qosLevel, WriteRequest... writeRequests);
+    Future<WriteResult> asyncWrite(WriteRequest... writeRequests);
 
     /**
      * 异步写入消息，线程安全，保证ACI，D的保证取决于WriteQosLevel
@@ -85,7 +100,7 @@ public interface PartitionGroupStore {
      * @see WriteResult
      * @see WriteRequest
      */
-    void asyncWrite(EventListener<WriteResult> eventListener, QosLevel qosLevel, WriteRequest... writeRequests);
+    void asyncWrite(EventListener<WriteResult> eventListener, WriteRequest... writeRequests);
 
 
 
@@ -103,22 +118,5 @@ public interface PartitionGroupStore {
      */
     ReadResult read(short partition, long index, int count, long maxSize) throws IOException;
 
-    /**
-     * 是否可读
-     * @return true： 可读， false： 不可读
-     */
-    boolean readable();
 
-    /**
-     * 是否可写
-     * @return true：可写， false：不可写
-     */
-    boolean writeable();
-
-    /**
-     * 等待集群可用后返回的Future
-     * @param timeoutMs 超时时长
-     * @return true 集群就绪，false 超时
-     */
-    CompletableFuture<Boolean> whenClusterReady(long timeoutMs);
 }
