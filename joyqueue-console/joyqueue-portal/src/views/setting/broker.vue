@@ -35,6 +35,18 @@
         </grid-col>
       </grid-row>
       <grid-row class="mb10">
+        <grid-col :span="8" class="label">对外IP:</grid-col>
+        <grid-col :span="16" class="val">
+          <d-input v-model="editData.externalIp" oninput="value = value.trim()"></d-input>
+        </grid-col>
+      </grid-row>
+      <grid-row class="mb10">
+        <grid-col :span="8" class="label">对外端口:</grid-col>
+        <grid-col :span="16" class="val">
+          <d-input v-model="editData.externalPort" oninput="value = value.trim()"></d-input>
+        </grid-col>
+      </grid-row>
+      <grid-row class="mb10">
         <grid-col :span="8" class="label">重试方式:</grid-col>
         <grid-col :span="16" class="val">
           <d-select v-model="editData.retryType" style="width:40%" >
@@ -191,6 +203,17 @@ export default {
                   }
                 }
               }, `${ip}:${port}`)
+            }
+          },
+          {
+            title: '对外Ip:端口',
+            key: 'externalIp',
+            width: '15%',
+            formatter (row) {
+              if (row.externalIp) {
+                return row.externalIp + ':' + row.externalPort
+              }
+              return ''
             }
           },
           {
@@ -513,7 +536,9 @@ export default {
           id: this.editData.id,
           brokerId: this.editData.brokerId,
           ip: this.editData.ip,
+          externalIp: this.editData.externalIp,
           port: this.editData.port,
+          externalPort: this.editData.externalPort,
           // dataCenter: this.editData['dataCenter'].id,
           retryType: this.editData.retryType,
           permission: this.editData.permission

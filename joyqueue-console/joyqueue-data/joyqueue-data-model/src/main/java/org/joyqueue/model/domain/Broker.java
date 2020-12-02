@@ -71,13 +71,22 @@ public class Broker extends BaseModel {
      * Broker实例的描述
      */
     private String description;
-
+    /**
+     * 权限
+     */
     private String permission=DEFAULT_PERMISSION;
+    /**
+     * 对外IP
+     */
+    private String externalIp;
+    /**
+     * 对外端口
+     */
+    private Integer externalPort;
 
     public Broker() {
         super();
     }
-
 
     public Broker(String ip, int port) {
         this.ip = ip;
@@ -182,6 +191,22 @@ public class Broker extends BaseModel {
 
     public void setPermission(String permission) {
         this.permission = permission;
+    }
+
+    public String getExternalIp() {
+        return externalIp;
+    }
+
+    public void setExternalIp(String externalIp) {
+        this.externalIp = externalIp;
+    }
+
+    public Integer getExternalPort() {
+        return externalPort;
+    }
+
+    public void setExternalPort(Integer externalPort) {
+        this.externalPort = externalPort;
     }
 
     @Override

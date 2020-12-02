@@ -40,6 +40,8 @@ public class NsrBrokerConverter extends Converter<Broker, org.joyqueue.domain.Br
         if (broker.getPermission() != null) {
             nsrBroker.setPermission(org.joyqueue.domain.Broker.PermissionEnum.value(broker.getPermission()));
         }
+        nsrBroker.setExternalIp(broker.getExternalIp());
+        nsrBroker.setExternalPort(broker.getExternalPort());
         return nsrBroker;
     }
 
@@ -50,7 +52,8 @@ public class NsrBrokerConverter extends Converter<Broker, org.joyqueue.domain.Br
         broker.setIp(nsrBroker.getIp());
         broker.setPort(nsrBroker.getPort());
         broker.setPermission(nsrBroker.getPermission().getName());
-
+        broker.setExternalIp(nsrBroker.getExternalIp());
+        broker.setExternalPort(nsrBroker.getExternalPort());
         broker.setRetryType(nsrBroker.getRetryType());
         if (broker.getDataCenter() != null) {
             broker.setDataCenter(new Identity(nsrBroker.getDataCenter()));
