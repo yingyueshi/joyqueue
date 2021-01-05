@@ -36,7 +36,6 @@ import java.util.Set;
 /**
  * Created by zhuduohui on 2018/8/27.
  */
-@Ignore
 public class ElectionMetadataManagerTest {
     private String metadataPath = getElectionDir();
     private ElectionMetadataManager electionMetadataManager;

@@ -16,6 +16,7 @@
 package org.joyqueue.broker.election;
 
 import org.joyqueue.broker.config.Configuration;
+import org.joyqueue.broker.replication.Replica;
 import org.joyqueue.domain.Broker;
 import org.joyqueue.domain.PartitionGroup;
 import org.joyqueue.domain.TopicName;
@@ -43,7 +44,6 @@ import java.util.TreeSet;
 /**
  * Created by zhuduohui on 2018/8/27.
  */
-@Ignore
 public class RaftLeaderElectionTest {
     private static Logger logger = LoggerFactory.getLogger(RaftLeaderElectionTest.class);
 
@@ -79,6 +79,24 @@ public class RaftLeaderElectionTest {
         return System.getProperty(property)  + File.separator + "election";
     }
 
+    private boolean deleteDir(File dir) {
+        if (dir.isDirectory()) {
+            String[] children = dir.list();
+            for (int i = 0; i < children.length; i++) {
+                boolean success = deleteDir
+                        (new File(dir, children[i]));
+                if (!success) {
+                    return false;
+                }
+            }
+        }
+        if(dir.delete()) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     @Before
     public void setUp() throws Exception {
         String localIp = IpUtil.getLocalIp();
@@ -86,12 +104,23 @@ public class RaftLeaderElectionTest {
         for (int i = 0; i < RAFT_ELECTION_NUM; i++) {
             Configuration conf = new Configuration();
             StoreConfig storeConfig = new StoreConfig(conf);
-            storeConfig.setPath(getStoreDir() + i);
+
+            String storeDir = getStoreDir() + i;
+            String electionDir = getElectionDir() + i;
+            if (deleteDir(new File(storeDir))) {
+                logger.info("Deleted dir {}", storeDir);
+            }
+
+            if (deleteDir(new File(electionDir))) {
+                logger.info("Deleted dir {}", electionDir);
+            }
+
+            storeConfig.setPath(storeDir);
             storeServices[i] = new Store(storeConfig);
             storeServices[i].start();
 
             ElectionConfig electionConfig = new ElectionConfig(conf);
-            electionConfig.setElectionMetaPath(getElectionDir() + i);
+            electionConfig.setElectionMetaPath(electionDir);
             electionConfig.setListenPort("1800" + (i + 1));
 
             electionManager[i] = new ElectionManagerStub(electionConfig, storeServices[i], new ConsumeStub());
@@ -143,7 +172,7 @@ public class RaftLeaderElectionTest {
 
     }
 
-    private void createElectionManager(List<Broker> allNodes) throws Exception {
+    private void createElections(List<Broker> allNodes) throws Exception {
         for (int i = 0; i < RAFT_ELECTION_NUM; i++) {
             storeServices[i].createPartitionGroup(topic1.getFullName(), partitionGroup1, partitions);
             electionManager[i].onPartitionGroupCreate(PartitionGroup.ElectType.raft,
@@ -195,7 +224,7 @@ public class RaftLeaderElectionTest {
             electionManager[leaderId - 1].stop();
             logger.info("Node " + leaderId + " stop");
 
-            Thread.sleep(10000);
+            Thread.sleep(15000);
 
             int leaderIdNew = getLeader(leaderElections[nextNode(leaderId) - 1], 10);
             Assert.assertNotEquals(leaderIdNew, -1);
@@ -216,7 +245,7 @@ public class RaftLeaderElectionTest {
                     topic1, partitionGroup1, allNodes, new TreeSet<Integer>(), brokers[leaderId - 1].getId(), -1);
             leaderElections[leaderId - 1] = electionManager[leaderId - 1].getLeaderElection(topic1, partitionGroup1);
             logger.info("Node " + leaderId + " start");
-            Thread.sleep(3000);
+            Thread.sleep(15000);
             Assert.assertEquals(leaderIdNew, leaderElections[leaderId - 1].getLeaderId());
 
             Thread.sleep(5000);
@@ -247,6 +276,10 @@ public class RaftLeaderElectionTest {
 
         Thread.sleep(3000);
 
+        for (Replica replica : leaderElections[0].getReplicaGroup().getReplicas()) {
+            logger.info("Replica {} write position is {}", replica.replicaId(), replica.writePosition());
+            Assert.assertNotEquals(replica.writePosition(), 0L);
+        }
         produceTask.stop(true);
         produceTask = null;
         consumeTask.stop(true);
@@ -263,7 +296,7 @@ public class RaftLeaderElectionTest {
             allNodes.add(brokers[i]);
         }
 
-        createElectionManager(allNodes);
+        createElections(allNodes);
 
         int leaderId = getLeader(leaderElections[0], 10);
         Assert.assertNotEquals(leaderId, -1);
@@ -278,6 +311,8 @@ public class RaftLeaderElectionTest {
         produceTask.start();
         consumeTask = new ConsumeTask(storeServices[leaderId - 1], topic1, partitionGroup1);
         consumeTask.start();
+
+        Thread.sleep(600000);
 
         for (int i = 0; i < 1; i++) {
             Thread.sleep(5000);
@@ -424,7 +459,7 @@ public class RaftLeaderElectionTest {
             allNodes.add(brokers[i]);
         }
 
-        createElectionManager(allNodes);
+        createElections(allNodes);
 
         int leaderId = getLeader(leaderElections[0], 10);
         Assert.assertNotEquals(leaderId, -1);
@@ -451,6 +486,8 @@ public class RaftLeaderElectionTest {
         produceTask = null;
         consumeTask.stop(true);
         consumeTask = null;
+
+        Thread.sleep(3000);
 
         for (int i = 0; i < RAFT_ELECTION_NUM; i++) {
             ReplicableStore rStore = storeServices[i].getReplicableStore(topic1.getFullName(), partitionGroup1);
@@ -566,7 +603,7 @@ public class RaftLeaderElectionTest {
             allNodes.add(brokers[i]);
         }
 
-        createElectionManager(allNodes);
+        createElections(allNodes);
 
         Thread.sleep(10000);
         int leaderId = leaderElections[0].getLeaderId();

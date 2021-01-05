@@ -119,7 +119,8 @@ public class ReplicateConsumePosRequestHandler implements CommandHandler, Type {
             response.setSuccess(true);
         } else {
             logger.warn("Set consume info fail, topic: {}, group: {}, term: {}, leaderId: {}, currentTerm: {}, currentLeaderId: {}",
-                    request.getTopic(), request.getGroup(), request.getTerm(), request.getLeaderId(), raftLeaderElection.getCurrentTerm(), raftLeaderElection.getLeaderId());
+                    request.getTopic(), request.getGroup(), request.getTerm(), request.getLeaderId(),
+                    raftLeaderElection.getCurrentTerm(), raftLeaderElection.getLeaderId());
             response.setSuccess(false);
         }
     }

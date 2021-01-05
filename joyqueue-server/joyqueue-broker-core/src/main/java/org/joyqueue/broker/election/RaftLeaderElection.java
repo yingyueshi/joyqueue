@@ -33,6 +33,7 @@ import org.joyqueue.network.transport.codec.JoyQueueHeader;
 import org.joyqueue.network.transport.command.Command;
 import org.joyqueue.network.transport.command.CommandCallback;
 import org.joyqueue.network.transport.command.Direction;
+import org.joyqueue.nsr.NameService;
 import org.joyqueue.store.replication.ReplicableStore;
 import org.joyqueue.toolkit.concurrent.EventBus;
 import org.joyqueue.toolkit.time.SystemClock;
@@ -1277,10 +1278,20 @@ public class RaftLeaderElection extends LeaderElection  {
 
 
     private int getRecommendLeader() {
-        TopicConfig topicConfig = clusterManager.getNameService().getTopicConfig(
+        NameService nameService = clusterManager.getNameService();
+        if (nameService == null) {
+            logger.warn("Get recommend leader name service is null");
+            return INVALID_NODE_ID;
+        }
+        TopicConfig topicConfig = nameService.getTopicConfig(
                 TopicName.parse(topicPartitionGroup.getTopic()));
+        if (topicConfig == null) {
+            logger.warn("Get recommend leader of {} topic config is null", topicPartitionGroup);
+            return INVALID_NODE_ID;
+        }
         PartitionGroup pg = topicConfig.getPartitionGroups().get(topicPartitionGroup.getPartitionGroupId());
         if (pg == null || pg.getRecLeader() == null) {
+            logger.warn("Get recommend leader of {} pg {} or recommend leader is null", topicPartitionGroup, pg);
             return INVALID_NODE_ID;
         }
         return pg.getRecLeader();

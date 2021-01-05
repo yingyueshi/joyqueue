@@ -49,6 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -567,6 +568,10 @@ public class ReplicaGroup extends Service {
                     return;
                 }
 
+                if (appendEntriesRequest.getEntriesLength() == 0) {
+                    return;
+                }
+
                 processAppendEntriesResponse(appendEntriesResponse, replica);
 
                 brokerMonitor.onReplicateMessage(topicPartitionGroup.getTopic(), topicPartitionGroup.getPartitionGroupId(),
@@ -674,10 +679,6 @@ public class ReplicaGroup extends Service {
                     request.setTopic(topicPartitionGroup.getTopic());
                     request.setGroup(topicPartitionGroup.getPartitionGroupId());
                     JoyQueueHeader header = new JoyQueueHeader(Direction.REQUEST, CommandType.REPLICATE_CONSUME_POS_REQUEST);
-
-                    if (electionConfig.enableReplicatePositionV3Protocol()) {
-                        header.setVersion(JoyQueueHeader.VERSION_V3);
-                    }
 
                     if (logger.isDebugEnabled() || electionConfig.getOutputConsumePos()) {
                         logger.debug("Partition group {}/node {} send consume position {} to node {}",
