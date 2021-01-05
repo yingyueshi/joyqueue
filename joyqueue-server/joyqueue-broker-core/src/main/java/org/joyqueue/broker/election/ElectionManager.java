@@ -175,7 +175,8 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
         for (Map.Entry<TopicPartitionGroup, ElectionMetadata> entry : electionMetadataManager.getAllElectionMetadata().entrySet()) {
             TopicPartitionGroup topicPartitionGroup = entry.getKey();
             ElectionMetadata electionMetadata = entry.getValue();
-            electionEventManager.add(new ElectionEvent(ElectionEvent.Type.START_ELECTION, electionMetadata.getCurrentTerm(), electionMetadata.getLeaderId(), topicPartitionGroup));
+            electionEventManager.add(new ElectionEvent(ElectionEvent.Type.START_ELECTION,
+                    electionMetadata.getCurrentTerm(), electionMetadata.getLeaderId(), topicPartitionGroup));
         }
 
         logger.info("Election manager started.");
@@ -238,7 +239,8 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
     public void onNodeAdd(TopicName topic, int partitionGroup, PartitionGroup.ElectType electType, List<Broker> brokers,
                           Set<Integer> learners, Broker broker, int localBroker, int leader) throws ElectionException {
 
-        logger.info("Add node {} to election of topic {}, partition group {}", broker, topic, partitionGroup);
+        logger.info("Add node {} to election of topic {}, partition group {}, learners is {}",
+                broker, topic, partitionGroup, JSON.toJSONString(learners));
 
         LeaderElection leaderElection = getLeaderElection(topic, partitionGroup);
         if (leaderElection == null) {
@@ -259,7 +261,8 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
                 return;
             }
         }
-        leaderElection.addNode(new DefaultElectionNode(broker.getIp() + ":" + broker.getBackEndPort(), broker.getId()));
+        leaderElection.addNode(new DefaultElectionNode(broker.getIp() + ":" + broker.getBackEndPort(), broker.getId()),
+                learners.contains(broker.getId()));
     }
 
     @Override
