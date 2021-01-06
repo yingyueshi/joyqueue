@@ -63,7 +63,6 @@ public class RetryServiceImpl implements RetryService {
 
     @Override
     public PageResult<ConsumeRetry> findByQuery(QPageQuery<QRetry> qPageQuery) throws JoyQueueException {
-        check();
         RetryQueryCondition queryCondition = new RetryQueryCondition();
         if (qPageQuery != null) {
             QRetry qRetry = qPageQuery.getQuery();
