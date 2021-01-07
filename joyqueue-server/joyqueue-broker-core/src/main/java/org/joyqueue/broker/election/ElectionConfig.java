@@ -165,6 +165,14 @@ public class ElectionConfig {
         return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_SHARED_HEARTBEAT);
     }
 
+    public boolean enableCheckFlushError() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_CHECK_FLUSH_ERROR);
+    }
+
+    public long getFlushErrorThreshold() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.FLUSH_ERROR_THRESHOLD);
+    }
+
     public void setListenPort(String port) {
         listenPort = Integer.valueOf(port);
     }

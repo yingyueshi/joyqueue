@@ -51,6 +51,8 @@ public enum ElectionConfigKey implements PropertyDef {
     CONNECTION_TIMEOUT("election.connection.timeout", 100 * 1, Type.INT),
     CONNECTION_RETRY_DELAY("election.connection.retryDelay", 1000 * 10, Type.INT),
     ENABLE_SHARED_HEARTBEAT("election.enable.shared.heartbeat", false, Type.BOOLEAN),
+    ENABLE_CHECK_FLUSH_ERROR("election.enable.check.flush.error", true, Type.BOOLEAN),
+    FLUSH_ERROR_THRESHOLD("election.flush.error.threshold", 100, Type.LONG),
     ;
 
     private String name;

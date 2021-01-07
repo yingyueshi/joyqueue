@@ -813,6 +813,26 @@ public class RaftLeaderElection extends LeaderElection  {
         }
     }
 
+    private boolean checkLeaderAvailable(ElectionNode node) {
+        if (!electionConfig.enableSharedHeartbeat()) {
+            Replica replica = replicaGroup.getReplica(node.getNodeId());
+            if (replica != null && replica.getLastAppendTime() != 0
+                    && SystemClock.now() - replica.getLastAppendTime() > electionConfig.getHeartbeatMaxTimeout()) {
+                logger.info("Check leader available to node {}, last append time is {}, now is {}",
+                        node.getNodeId(), replica.getLastAppendTime(), SystemClock.now());
+                return false;
+            }
+        }
+        if (electionConfig.enableCheckFlushError()) {
+            if (replicaGroup.getStoreFlushErrorTimes() > electionConfig.getFlushErrorThreshold()) {
+                logger.info("Check leader available to node {}, flush error times is {}",
+                        node.getNodeId(), replicaGroup.getStoreFlushErrorTimes());
+                return false;
+            }
+        }
+        return true;
+    }
+
     /**
      * 开始新一轮心跳，向Follower节点发送心跳命令，重置心跳定时器
      */
@@ -834,12 +854,8 @@ public class RaftLeaderElection extends LeaderElection  {
                 continue;
             }
 
-            if (!electionConfig.enableSharedHeartbeat()) {
-                Replica replica = replicaGroup.getReplica(node.getNodeId());
-                if (replica != null && replica.getLastAppendTime() != 0
-                        && SystemClock.now() - replica.getLastAppendTime() > electionConfig.getHeartbeatMaxTimeout()) {
-                    continue;
-                }
+            if (!checkLeaderAvailable(node)) {
+                continue;
             }
 
             try {

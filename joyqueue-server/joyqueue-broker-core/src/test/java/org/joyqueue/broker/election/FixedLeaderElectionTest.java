@@ -25,10 +25,7 @@ import org.joyqueue.store.replication.ReplicableStore;
 import org.joyqueue.toolkit.concurrent.EventListener;
 import org.joyqueue.toolkit.io.Files;
 import org.joyqueue.toolkit.network.IpUtil;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +37,7 @@ import java.util.TreeSet;
 /**
  * Created by zhuduohui on 2018/8/27.
  */
+@Ignore
 public class FixedLeaderElectionTest {
     private static Logger logger = LoggerFactory.getLogger(RaftLeaderElectionTest.class);
 

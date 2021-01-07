@@ -197,6 +197,7 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
         for (Map.Entry<String, ReplicationTransportSession> entry : sessions.entrySet()) {
             entry.getValue().stop();
         }
+        sessions.clear();
 
         Close.close(electionTimerExecutor);
         Close.close(electionExecutor);

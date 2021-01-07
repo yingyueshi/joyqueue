@@ -202,6 +202,10 @@ public class ReplicaGroup extends Service {
                 logger.info("Partition group {}/node {} add node, replica {}'s next position is {}",
                         topicPartitionGroup, localReplicaId, replica.replicaId(), replica.nextPosition());
             }
+            for (Replica replica : replicasWithoutLearners) {
+                logger.info("Partition group {}/node {} add node, not learner replica {}'s next position is {}",
+                        topicPartitionGroup, localReplicaId, replica.replicaId(), replica.nextPosition());
+            }
         } catch (Exception e) {
             logger.error("add node error.", e);
             throw new ElectionException("add node error.", e);
@@ -236,6 +240,10 @@ public class ReplicaGroup extends Service {
                 .filter(r -> r.replicaId() == replicaId)
                 .findFirst()
                 .orElse(null);
+    }
+
+    public long getStoreFlushErrorTimes() {
+        return replicableStore.flushErrorTimes();
     }
 
     public List<Replica> getReplicas() {
@@ -400,6 +408,7 @@ public class ReplicaGroup extends Service {
         if (replicas.size() == 1) {
             if (replicableStore.commitPosition() < replicableStore.rightPosition()) {
                 replicableStore.commit(replicableStore.rightPosition());
+                getReplica(localReplicaId).commitPosition(replicableStore.rightPosition());
                 delayTimeNs = 0;
             } else {
                 delayTimeNs = ONE_MS_NANO / 5;
@@ -510,6 +519,7 @@ public class ReplicaGroup extends Service {
                 .leftPosition(leftPosition).match(replica.isMatch())
                 .commitPosition(replicableStore.commitPosition()).prevTerm(prevTerm)
                 .prevPosition(prevPosition).entriesTerm(entriesTerm).entries(entries)
+                .oldEntriesLength(entries.remaining())
                 .build();
     }
 
@@ -568,7 +578,7 @@ public class ReplicaGroup extends Service {
                     return;
                 }
 
-                if (appendEntriesRequest.getEntriesLength() == 0) {
+                if (appendEntriesRequest.getOrigEntriesLength() == 0) {
                     return;
                 }
 

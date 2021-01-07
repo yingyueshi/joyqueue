@@ -36,7 +36,7 @@ public class JoyQueueHeader implements Header {
     public static final byte VERSION_V3 = 3;
     public static final byte VERSION_V4 = 4;
 
-    public static final byte CURRENT_VERSION = VERSION_V3;
+    public static final byte CURRENT_VERSION = VERSION_V4;
 
     public static final int MAGIC = 0xCAFEBEBE;
 
