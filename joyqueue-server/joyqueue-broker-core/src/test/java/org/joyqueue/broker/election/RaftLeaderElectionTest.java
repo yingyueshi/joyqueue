@@ -23,12 +23,10 @@ import org.joyqueue.domain.TopicName;
 import org.joyqueue.store.*;
 import org.joyqueue.store.replication.ReplicableStore;
 import org.joyqueue.toolkit.concurrent.EventListener;
-import org.joyqueue.toolkit.io.Files;
 import org.joyqueue.toolkit.network.IpUtil;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -197,6 +195,15 @@ public class RaftLeaderElectionTest {
             }
         }
 
+        if (storeServiceAdd != null) {
+            storeServiceAdd.stop();
+            storeServiceAdd = null;
+        }
+        if (electionManagerAdd != null) {
+            electionManagerAdd.stop();
+            electionManagerAdd = null;
+        }
+
         if (produceTask != null) {
             produceTask.stop(true);
             produceTask = null;
@@ -296,6 +303,8 @@ public class RaftLeaderElectionTest {
 
     @Test
     public void testOneNode() throws Exception {
+        System.out.println("Start test one node");
+
         List<Broker> allNodes = new LinkedList<>();
         allNodes.add(brokers[0]);
         storeServices[0].createPartitionGroup(topic1.getFullName(), partitionGroup1, partitions);
@@ -306,6 +315,8 @@ public class RaftLeaderElectionTest {
 
         int leaderId = getLeader(leaderElections[0], 10);
         Assert.assertEquals(leaderId, 1);
+
+        System.out.println("Leader is " + leaderId);
 
         produceTask = new ProduceTask(storeServices[leaderId - 1], topic1, partitionGroup1);
         produceTask.start();
@@ -653,10 +664,9 @@ public class RaftLeaderElectionTest {
     ** 测试先加节点再删节点
     ** 1、开始topic-pg 有 A，B，C 三个节点
     ** 2、增加节点D
-    ** 3、设置D为leader
-    ** 4、删除节点C
-    ** 5、停止节点A
-    ** 测试写入是否正常
+    ** 3、删除非leader节点
+    ** 4、停止另一个非leader节点
+    ** 5、测试写入是否正常
      */
     @Test
     public void testAddNodeAndRemoveNode() throws Exception {
@@ -690,19 +700,6 @@ public class RaftLeaderElectionTest {
         }
         System.out.println("Node " + brokerAdd.getId() + ", leader is " + leaderElectionAdd.getLeaderId());
 
-
-        // Transfer leader to node 4
-        /*
-        System.out.println("Transfer leader from " + leaderId + " to " + brokerAdd.getId());
-        electionManager[leaderId - 1].onLeaderChange(topic1, partitionGroup1, brokerAdd.getId());
-
-        Thread.sleep(5000);
-        for (int i = 0; i < RAFT_ELECTION_NUM; i++) {
-            Assert.assertEquals(leaderElections[i].getLeaderId(), (long)brokerAdd.getId());
-            System.out.println("Node " + (i + 1) + ", leader is " + leaderElections[i].getLeaderId());
-        }
-        System.out.println("Node " + brokerAdd.getId() + ", leader is " + leaderElectionAdd.getLeaderId());
-        */
 
         // remove node
         int removeNodeIndex = nextNode(leaderId) - 1;
@@ -744,10 +741,7 @@ public class RaftLeaderElectionTest {
     public void testTransferLeader() throws Exception {
         System.out.println("Start test transfer leader");
 
-        List<Broker> allNodes = new LinkedList<>();
-        for (int i = 0; i < NODE_NUM; i++) {
-            allNodes.add(brokers[i]);
-        }
+        List<Broker> allNodes = new LinkedList<>(Arrays.asList(brokers));
 
         createElections(allNodes);
 
@@ -766,44 +760,50 @@ public class RaftLeaderElectionTest {
         consumeTask.start();
 
         try {
-            electionManager[leaderId - 1].onLeaderChange(topic1, partitionGroup1, nextNode(leaderId));
+            int transfee = nextNode(leaderId);
+            System.out.println("Transfer leader from " + leaderId + " to " + transfee);
+            electionManager[leaderId - 1].onLeaderChange(topic1, partitionGroup1, transfee);
 
             Thread.sleep(10000);
             int leaderId1 = leaderElections[leaderId - 1].getLeaderId();
 
             System.out.println("Leader1 is " + leaderId1);
 
-            Assert.assertEquals(leaderId1, nextNode(leaderId));
+            Assert.assertEquals(leaderId1, transfee);
 
             for (int i = 0; i < RAFT_ELECTION_NUM; i++) {
                 Assert.assertEquals(leaderId1, leaderElections[i].getLeaderId());
             }
 
+            int stopNode = nextNode(leaderId1);
             {
-                electionManager[nextNode(leaderId1) - 1].removeLeaderElection(topic1.getFullName(), partitionGroup1);
-                electionManager[nextNode(leaderId1) - 1].stop();
+                electionManager[stopNode - 1].removeLeaderElection(topic1.getFullName(), partitionGroup1);
+                electionManager[stopNode - 1].stop();
 
-                System.out.println("Node " + nextNode(leaderId1) + " stop");
+                System.out.println("Node " + stopNode + " stop");
 
                 Thread.sleep(3000);
 
-                electionManager[nextNode(leaderId1) - 1].start();
-                electionManager[nextNode(leaderId1) - 1].onPartitionGroupCreate(PartitionGroup.ElectType.raft,
-                        topic1, partitionGroup1, allNodes, new TreeSet<>(), brokers[nextNode(leaderId1) - 1].getId(), -1);
-                leaderElections[nextNode(leaderId1) - 1] = electionManager[nextNode(leaderId1) - 1].getLeaderElection(topic1, partitionGroup1);
-                electionManager[nextNode(leaderId1) - 1].addListener(new ElectionEventListener());
-                Thread.sleep(10000);
+                electionManager[stopNode - 1].start();
+                electionManager[stopNode - 1].onPartitionGroupCreate(PartitionGroup.ElectType.raft,
+                        topic1, partitionGroup1, allNodes, new TreeSet<>(), brokers[stopNode - 1].getId(), -1);
+                leaderElections[stopNode - 1] = electionManager[stopNode - 1].getLeaderElection(topic1, partitionGroup1);
+                electionManager[stopNode - 1].addListener(new ElectionEventListener());
+
+                System.out.println("Node " + stopNode + " start");
+
+                Thread.sleep(15000);
             }
 
-            System.out.println("Change node from " + leaderId1 + " to " + nextNode(leaderId1));
+            System.out.println("Change node from " + leaderId1 + " to " + stopNode);
 
-            electionManager[leaderId1 - 1].onLeaderChange(topic1, partitionGroup1, nextNode(leaderId1));
+            electionManager[leaderId1 - 1].onLeaderChange(topic1, partitionGroup1, stopNode);
             Thread.sleep(10000);
 
             int leaderId2 = leaderElections[leaderId1 - 1].getLeaderId();
 
             System.out.println("Leader2 is " + leaderId2);
-            Assert.assertEquals(leaderId2, nextNode(leaderId1));
+            Assert.assertEquals(leaderId2, stopNode);
 
             for (int i = 0; i < RAFT_ELECTION_NUM; i++) {
                 Assert.assertEquals(leaderId2, leaderElections[i].getLeaderId());

@@ -48,11 +48,13 @@ public class ReplicateConsumePosRequestHandler implements CommandHandler, Type {
     private ElectionConfig electionConfig;
     private ElectionService electionService;
 
-    public ReplicateConsumePosRequestHandler(ElectionConfig electionConfig, Consume consume) {
+    // for test
+    public ReplicateConsumePosRequestHandler(ElectionConfig electionConfig, Consume consume, ElectionService electionService) {
         Preconditions.checkArgument(consume != null, "consume is null");
 
         this.electionConfig = electionConfig;
         this.consume = consume;
+        this.electionService = electionService;
     }
 
     public ReplicateConsumePosRequestHandler(BrokerContext brokerContext) {

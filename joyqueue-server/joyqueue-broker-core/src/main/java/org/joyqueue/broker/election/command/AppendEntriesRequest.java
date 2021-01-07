@@ -262,7 +262,7 @@ public class AppendEntriesRequest extends JoyQueuePayload implements Releasable 
             return this;
         }
 
-        public Build oldEntriesLength(int length) {
+        public Build origEntriesLength(int length) {
             appendEntriesRequest.setOrigEntriesLength(length);
             return this;
         }

@@ -519,7 +519,7 @@ public class ReplicaGroup extends Service {
                 .leftPosition(leftPosition).match(replica.isMatch())
                 .commitPosition(replicableStore.commitPosition()).prevTerm(prevTerm)
                 .prevPosition(prevPosition).entriesTerm(entriesTerm).entries(entries)
-                .oldEntriesLength(entries.remaining())
+                .origEntriesLength(entries.remaining())
                 .build();
     }
 

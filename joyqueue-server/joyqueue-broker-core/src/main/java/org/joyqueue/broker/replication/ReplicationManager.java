@@ -92,7 +92,7 @@ public class ReplicationManager extends Service {
         clientConfig.setIoThread(32);
         clientConfig.setSocketBufferSize(1024 * 1024 * 1);
         clientConfig.setConnectionTimeout(300 * 1);
-        clientConfig.getRetryPolicy().setRetryDelay(1000 * 60);
+        clientConfig.getRetryPolicy().setRetryDelay(1000 * 6);
         transportClient = new BrokerTransportClientFactory().create(clientConfig);
         transportClient.start();
 
