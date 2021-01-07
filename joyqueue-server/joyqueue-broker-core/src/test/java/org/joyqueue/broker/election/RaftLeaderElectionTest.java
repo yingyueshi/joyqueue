@@ -244,6 +244,7 @@ public class RaftLeaderElectionTest {
 
     @Test
     public void testElection() throws Exception{
+        System.out.println("Start test election");
 
         List<Broker> allNodes = new LinkedList<>();
         for (int i = 0; i < NODE_NUM; i++) {
@@ -259,25 +260,25 @@ public class RaftLeaderElectionTest {
 
         int leaderId = getLeader(leaderElections[0], 10);
         Assert.assertNotEquals(leaderId, -1);
-        logger.info("================== Leader id is " + leaderId);
+        System.out.println("Leader id is " + leaderId);
         Assert.assertEquals(leaderId, leaderElections[1].getLeaderId());
         Assert.assertEquals(leaderId, leaderElections[2].getLeaderId());
 
         for (int i = 0; i < 1; i++) {
             electionManager[leaderId - 1].stop();
-            logger.info("=================== Node " + leaderId + " stop");
+            System.out.println("Node " + leaderId + " stop");
 
-            Thread.sleep(15000);
+            Thread.sleep(10000);
 
             int leaderIdNew = getLeader(leaderElections[nextNode(leaderId) - 1], 10);
             Assert.assertNotEquals(leaderIdNew, -1);
-            logger.info("=================== New leader id is " + leaderIdNew);
+            System.out.println("New leader id is " + leaderIdNew);
 
             Thread.sleep(1000);
 
             for (int j = 0; j < NODE_NUM; j++) {
                 if (j != leaderId - 1) {
-                    logger.info("================= Leader id of leader election {} is {}", j + 1, leaderElections[j].getLeaderId());
+                    System.out.println("Leader id of leader election " + (j + 1) + " is " + leaderElections[j].getLeaderId());
                     Assert.assertEquals(leaderIdNew, leaderElections[j].getLeaderId());
                 }
             }
@@ -287,9 +288,9 @@ public class RaftLeaderElectionTest {
             electionManager[leaderId - 1].onPartitionGroupCreate(PartitionGroup.ElectType.raft,
                     topic1, partitionGroup1, allNodes, new TreeSet<Integer>(), brokers[leaderId - 1].getId(), -1);
             leaderElections[leaderId - 1] = electionManager[leaderId - 1].getLeaderElection(topic1, partitionGroup1);
-            logger.info("========================== Node " + leaderId + " start");
+            System.out.println("Node " + leaderId + " start");
 
-            Thread.sleep(5000);
+            Thread.sleep(10000);
 
             Assert.assertEquals(leaderIdNew, leaderElections[leaderId - 1].getLeaderId());
 
@@ -792,13 +793,13 @@ public class RaftLeaderElectionTest {
 
                 System.out.println("Node " + stopNode + " start");
 
-                Thread.sleep(15000);
+                Thread.sleep(10000);
             }
 
             System.out.println("Change node from " + leaderId1 + " to " + stopNode);
 
             electionManager[leaderId1 - 1].onLeaderChange(topic1, partitionGroup1, stopNode);
-            Thread.sleep(10000);
+            Thread.sleep(5000);
 
             int leaderId2 = leaderElections[leaderId1 - 1].getLeaderId();
 
@@ -809,7 +810,7 @@ public class RaftLeaderElectionTest {
                 Assert.assertEquals(leaderId2, leaderElections[i].getLeaderId());
             }
 
-            Thread.sleep(10000);
+            Thread.sleep(1000);
         } finally {
             produceTask.stop(true);
             consumeTask.stop(true);
