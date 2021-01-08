@@ -49,6 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -183,7 +184,7 @@ public class ReplicaGroup extends Service {
      *
      * @param node 要添加的节点
      */
-    public synchronized void addNode(ElectionNode node) throws ElectionException {
+    public synchronized void addNode(ElectionNode node, boolean isLearner) throws ElectionException {
         try {
             Replica newReplica = new Replica(node.getNodeId(), node.getAddress());
             //至少复制一个消息，保证没有消息的时候也能将原先的消息复制到slave
@@ -191,11 +192,18 @@ public class ReplicaGroup extends Service {
             newReplica.nextPosition(nextReplicate);
 
             replicas.add(newReplica);
+            if (!isLearner) {
+                replicasWithoutLearners.add(newReplica);
+            }
 
             replicateResponseQueue.put(new DelayedCommand(ONE_SECOND_NANO, newReplica.replicaId()));
 
             for (Replica replica : replicas) {
                 logger.info("Partition group {}/node {} add node, replica {}'s next position is {}",
+                        topicPartitionGroup, localReplicaId, replica.replicaId(), replica.nextPosition());
+            }
+            for (Replica replica : replicasWithoutLearners) {
+                logger.info("Partition group {}/node {} add node, not learner replica {}'s next position is {}",
                         topicPartitionGroup, localReplicaId, replica.replicaId(), replica.nextPosition());
             }
         } catch (Exception e) {
@@ -227,11 +235,19 @@ public class ReplicaGroup extends Service {
      * @param replicaId 副本id
      * @return replica
      */
-    private Replica getReplica(int replicaId) {
+    public Replica getReplica(int replicaId) {
         return replicas.stream()
                 .filter(r -> r.replicaId() == replicaId)
                 .findFirst()
                 .orElse(null);
+    }
+
+    public long getStoreFlushErrorTimes() {
+        return replicableStore.flushErrorTimes();
+    }
+
+    public List<Replica> getReplicas() {
+        return Collections.unmodifiableList(replicas);
     }
 
 
@@ -242,7 +258,6 @@ public class ReplicaGroup extends Service {
     public void setState(ElectionNode.State state) {
         this.state = state;
         this.brokerMonitor.onReplicaStateChange(topicPartitionGroup.getTopic(),topicPartitionGroup.getPartitionGroupId(),state);
-
     }
 
     /**
@@ -393,6 +408,7 @@ public class ReplicaGroup extends Service {
         if (replicas.size() == 1) {
             if (replicableStore.commitPosition() < replicableStore.rightPosition()) {
                 replicableStore.commit(replicableStore.rightPosition());
+                getReplica(localReplicaId).commitPosition(replicableStore.rightPosition());
                 delayTimeNs = 0;
             } else {
                 delayTimeNs = ONE_MS_NANO / 5;
@@ -401,6 +417,7 @@ public class ReplicaGroup extends Service {
             delayTimeNs = ONE_SECOND_NANO;
         }
 
+        getReplica(localReplicaId).writePosition(replicableStore.rightPosition());
         replicateResponseQueue.put(new DelayedCommand(delayTimeNs, localReplicaId));
     }
 
@@ -416,7 +433,7 @@ public class ReplicaGroup extends Service {
 
                     AppendEntriesRequest request = generateAppendEntriesRequest(replica);
                     if (request == null) {
-                        if (!electionConfig.enableSharedHeartbeat()) {
+                        if (!electionConfig.enableReplicateHeartbeat()) {
                             if (SystemClock.now() - replica.getLastAppendTime() >= electionConfig.getHeartbeatTimeout()) {
                                 request = generateHeartbeatRequest(replica);
                             }
@@ -502,6 +519,7 @@ public class ReplicaGroup extends Service {
                 .leftPosition(leftPosition).match(replica.isMatch())
                 .commitPosition(replicableStore.commitPosition()).prevTerm(prevTerm)
                 .prevPosition(prevPosition).entriesTerm(entriesTerm).entries(entries)
+                .origEntriesLength(entries.remaining())
                 .build();
     }
 
@@ -560,13 +578,17 @@ public class ReplicaGroup extends Service {
                     return;
                 }
 
+                if (appendEntriesRequest.getOrigEntriesLength() == 0) {
+                    return;
+                }
+
                 processAppendEntriesResponse(appendEntriesResponse, replica);
 
                 brokerMonitor.onReplicateMessage(topicPartitionGroup.getTopic(), topicPartitionGroup.getPartitionGroupId(),
                         1, entriesLength, usTime() - startTimeUs);
 
             } catch (Exception e) {
-                logger.info("Partition group {}/node {} process append entries reponse fail",
+                logger.info("Partition group {}/node {} process append entries response fail",
                         topicPartitionGroup, localReplicaId, e);
             } finally {
                 replicateResponseQueue.put(new DelayedCommand(0, replica.replicaId()));
@@ -660,7 +682,12 @@ public class ReplicaGroup extends Service {
                         return;
                     }
 
-                    ReplicateConsumePosRequest request = new ReplicateConsumePosRequest(consumePositions);
+                    ReplicateConsumePosRequest request = new ReplicateConsumePosRequest();
+                    request.setConsumePositions(consumePositions);
+                    request.setTerm(currentTerm);
+                    request.setLeaderId(leaderId);
+                    request.setTopic(topicPartitionGroup.getTopic());
+                    request.setGroup(topicPartitionGroup.getPartitionGroupId());
                     JoyQueueHeader header = new JoyQueueHeader(Direction.REQUEST, CommandType.REPLICATE_CONSUME_POS_REQUEST);
 
                     if (logger.isDebugEnabled() || electionConfig.getOutputConsumePos()) {

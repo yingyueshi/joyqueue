@@ -140,6 +140,8 @@ public class PartitionGroupStoreManager extends Service implements ReplicableSto
     private final CasLock flushLock = new CasLock(); // 刷盘锁，刷盘、回滚的时候需要持有这个锁。
     private final ReadWriteLock rollbackLock = new ReentrantReadWriteLock();
 
+    private long flushErrorTimes = 0;
+
     public PartitionGroupStoreManager(String topic, int partitionGroup, File base, Config config,
                                       PreloadBufferPool bufferPool) {
         this.base = base;
@@ -882,12 +884,14 @@ public class PartitionGroupStoreManager extends Service implements ReplicableSto
                     if (flushed) {
                         callbackMap.get(QosLevel.PERSISTENCE).callbackBefore(flushPosition());
                     }
+                    flushErrorTimes = 0;
 
                     // 定期更新CheckPoint
                     flushCheckpointPeriodically();
                 } while (flushed && isStarted());
             } catch (IOException e) {
                 logger.warn("Exception:", e);
+                flushErrorTimes++;
             } finally {
                 flushLock.unlock();
             }
@@ -1820,6 +1824,11 @@ public class PartitionGroupStoreManager extends Service implements ReplicableSto
                 callback.listener.onEvent(new WriteResult(JoyQueueCode.SUCCESS, callback.indices));
             }
         }
+    }
+
+    @Override
+    public long flushErrorTimes() {
+        return flushErrorTimes;
     }
 
 }

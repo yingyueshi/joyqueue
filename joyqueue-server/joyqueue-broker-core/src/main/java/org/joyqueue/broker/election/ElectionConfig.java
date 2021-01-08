@@ -81,6 +81,10 @@ public class ElectionConfig {
         return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.HEARTBEAT_TIMEOUT);
     }
 
+    public int getHeartbeatMaxTimeout() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.HEARTBEAT_MAX_TIMEOUT);
+    }
+
     public int getSendCommandTimeout() {
         return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.SEND_COMMAND_TIMEOUT);
     }
@@ -159,6 +163,18 @@ public class ElectionConfig {
 
     public boolean enableSharedHeartbeat() {
         return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_SHARED_HEARTBEAT);
+    }
+
+    public boolean enableReplicateHeartbeat() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_REPLICATE_HEARTBEAT);
+    }
+
+    public boolean enableCheckFlushError() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_CHECK_FLUSH_ERROR);
+    }
+
+    public long getFlushErrorThreshold() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.FLUSH_ERROR_THRESHOLD);
     }
 
     public void setListenPort(String port) {

@@ -139,4 +139,5 @@ public interface ReplicableStore {
      */
     int getEntryTerm(long position) throws IOException;
 
+    long flushErrorTimes();
 }
