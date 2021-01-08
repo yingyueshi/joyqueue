@@ -433,7 +433,7 @@ public class ReplicaGroup extends Service {
 
                     AppendEntriesRequest request = generateAppendEntriesRequest(replica);
                     if (request == null) {
-                        if (!electionConfig.enableSharedHeartbeat()) {
+                        if (!electionConfig.enableReplicateHeartbeat()) {
                             if (SystemClock.now() - replica.getLastAppendTime() >= electionConfig.getHeartbeatTimeout()) {
                                 request = generateHeartbeatRequest(replica);
                             }

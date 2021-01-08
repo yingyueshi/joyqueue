@@ -814,19 +814,19 @@ public class RaftLeaderElection extends LeaderElection  {
     }
 
     private boolean checkLeaderAvailable(ElectionNode node) {
-        if (!electionConfig.enableSharedHeartbeat()) {
+        if (!electionConfig.enableReplicateHeartbeat()) {
             Replica replica = replicaGroup.getReplica(node.getNodeId());
             if (replica != null && replica.getLastAppendTime() != 0
                     && SystemClock.now() - replica.getLastAppendTime() > electionConfig.getHeartbeatMaxTimeout()) {
-                logger.info("Check leader available to node {}, last append time is {}, now is {}",
-                        node.getNodeId(), replica.getLastAppendTime(), SystemClock.now());
+                logger.info("Partition group {}/node {} check leader available to node {}, last append time is {}, now is {}",
+                        topicPartitionGroup, localNode, node.getNodeId(), replica.getLastAppendTime(), SystemClock.now());
                 return false;
             }
         }
         if (electionConfig.enableCheckFlushError()) {
             if (replicaGroup.getStoreFlushErrorTimes() > electionConfig.getFlushErrorThreshold()) {
-                logger.info("Check leader available to node {}, flush error times is {}",
-                        node.getNodeId(), replicaGroup.getStoreFlushErrorTimes());
+                logger.info("Partition group {}/node {} check leader available to node {}, flush error times is {}",
+                        topicPartitionGroup, localNode, node.getNodeId(), replicaGroup.getStoreFlushErrorTimes());
                 return false;
             }
         }

@@ -117,6 +117,10 @@ public class ReplicationManager extends Service {
                             replicaLeaderCount++;
                             logger.info("Partition group {} flush error times is {}",
                                     entry.getKey(), replicaGroup.getStoreFlushErrorTimes());
+                            if (replicaGroup.getStoreFlushErrorTimes() > 0) {
+                                logger.info("Partition group {} have flush error times is {}",
+                                        entry.getKey(), replicaGroup.getStoreFlushErrorTimes());
+                            }
                         }
                     }
                     logger.info("ReplicationManager, managed replica group count {} ,leader count {} , replicate queue capacity is {}, current size is {}",
