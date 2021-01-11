@@ -16,6 +16,7 @@
 package org.joyqueue.broker.archive;
 
 import org.joyqueue.server.archive.store.model.ConsumeLog;
+import org.joyqueue.server.archive.store.utils.ArchiveSerializer;
 import org.joyqueue.toolkit.time.SystemClock;
 import org.apache.commons.lang.builder.ToStringBuilder;
 import org.junit.Assert;
@@ -40,7 +41,7 @@ public class ArchiveSerializerTest {
 
         System.out.println(ToStringBuilder.reflectionToString(consumeLog));
 
-        ByteBuffer write = ArchiveSerializer.write(consumeLog);
+        ByteBuffer write = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(consumeLog);
         System.out.println(write.limit());
     }
 
@@ -54,11 +55,11 @@ public class ArchiveSerializerTest {
         consumeLog.setConsumeTime(SystemClock.now());
         System.out.println(ToStringBuilder.reflectionToString(consumeLog));
 
-        ByteBuffer write = ArchiveSerializer.write(consumeLog);
+        ByteBuffer write = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(consumeLog);
 
         int readLen = write.getInt();
         System.out.println(readLen);
-        ConsumeLog log = ArchiveSerializer.read(write);
+        ConsumeLog log = ArchiveSerializer.ConsumeArchiveSerializer.readConsumeLog(write);
         System.out.println(ToStringBuilder.reflectionToString(log));
 
     }

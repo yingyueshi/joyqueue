@@ -38,6 +38,7 @@ import org.joyqueue.network.session.Consumer;
 import org.joyqueue.server.archive.store.api.ArchiveStore;
 import org.joyqueue.server.archive.store.model.AchivePosition;
 import org.joyqueue.server.archive.store.model.SendLog;
+import org.joyqueue.server.archive.store.utils.ArchiveSerializer;
 import org.joyqueue.store.PositionOverflowException;
 import org.joyqueue.store.PositionUnderflowException;
 import org.joyqueue.toolkit.concurrent.LoopThread;
@@ -392,7 +393,7 @@ public class ProduceArchiveService extends Service {
         sendLog.setTopic(brokerMessage.getTopic());
         sendLog.setSendTime(brokerMessage.getStartTime());
         sendLog.setBusinessId(brokerMessage.getBusinessId() == null ? "" : brokerMessage.getBusinessId());
-        sendLog.setMessageId(ArchiveUtils.messageId(brokerMessage.getTopic(),brokerMessage.getPartition(), brokerMessage.getMsgIndexNo()));
+        sendLog.setMessageId(ArchiveSerializer.messageId(brokerMessage.getTopic(),brokerMessage.getPartition(), brokerMessage.getMsgIndexNo()));
         sendLog.setBrokerId(clusterManager.getBrokerId());
         sendLog.setApp(brokerMessage.getApp());
         sendLog.setClientIp(brokerMessage.getClientIp());

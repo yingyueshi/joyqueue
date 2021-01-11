@@ -31,6 +31,7 @@ import org.joyqueue.monitor.TraceStat;
 import org.joyqueue.network.session.Connection;
 import org.joyqueue.server.archive.store.api.ArchiveStore;
 import org.joyqueue.server.archive.store.model.ConsumeLog;
+import org.joyqueue.server.archive.store.utils.ArchiveSerializer;
 import org.joyqueue.toolkit.concurrent.LoopThread;
 import org.joyqueue.toolkit.lang.Close;
 import org.joyqueue.toolkit.security.Md5;
@@ -237,7 +238,7 @@ public class ConsumeArchiveService extends Service {
                 // 1个字节开始符号，4个字节int类型长度信息
                 readByteCounter.addAndGet(1 + 4 + bytes.length);
                 // 反序列花并放入集合
-                list.add(ArchiveSerializer.read(ByteBuffer.wrap(bytes)));
+                list.add(ArchiveSerializer.ConsumeArchiveSerializer.readConsumeLog(ByteBuffer.wrap(bytes)));
             } else {
                 break;
             }
@@ -279,7 +280,7 @@ public class ConsumeArchiveService extends Service {
                 List<ConsumeLog> logList = convert(connection, locations);
                 logList.forEach(log -> {
                     // 序列化
-                    ByteBuffer buffer = ArchiveSerializer.write(log);
+                    ByteBuffer buffer = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(log);
                     appendLog(buffer);
                     ArchiveSerializer.release(buffer);
                 });

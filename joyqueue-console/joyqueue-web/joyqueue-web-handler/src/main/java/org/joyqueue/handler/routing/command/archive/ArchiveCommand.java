@@ -16,7 +16,6 @@
 package org.joyqueue.handler.routing.command.archive;
 
 import com.alibaba.fastjson.JSON;
-import org.joyqueue.broker.archive.ArchiveUtils;
 import org.joyqueue.util.serializer.Serializer;
 import org.joyqueue.exception.ServiceException;
 import org.joyqueue.handler.error.ErrorCode;
@@ -198,7 +197,7 @@ public class ArchiveCommand implements Command<Response>, Poolable {
                     Base64.getEncoder().encodeToString(sendLog.getBytesMessageId()), sendLog.getMessageId());
         }
         for(BrokerMessage m:msgs){
-            String msgId=ArchiveUtils.messageId(brokerMessage.getTopic(),m.getPartition(),m.getMsgIndexNo());
+            String msgId=ArchiveSerializer.messageId(brokerMessage.getTopic(),m.getPartition(),m.getMsgIndexNo());
             byte[] msgIdMd5Bytes= ArchiveSerializer.md5(msgId,null);
             if(logger.isDebugEnabled()) {
                 logger.debug("current message business id {},message id {},md5 length {},base 64 bytes {},hex {}", m.getBusinessId(), msgId, msgIdMd5Bytes.length,

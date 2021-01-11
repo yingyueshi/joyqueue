@@ -120,7 +120,7 @@ public class HBaseStore implements ArchiveStore {
                 int appId = topicAppMapping.getAppId(app);
                 consumeLog.setAppId(appId);
 
-                Pair<byte[], byte[]> pair = ArchiveSerializer.convertConsumeLogToKVBytes(consumeLog);
+                Pair<byte[], byte[]> pair = ArchiveSerializer.ConsumeArchiveSerializer.convertConsumeLogToKVBytes(consumeLog);
 
                 logList.add(pair);
             }
@@ -147,10 +147,10 @@ public class HBaseStore implements ArchiveStore {
                 log.setTopicId(topicId);
                 log.setAppId(appId);
 
-                Pair<byte[], byte[]> pair = ArchiveSerializer.convertSendLogToKVBytes(log);
+                Pair<byte[], byte[]> pair = ArchiveSerializer.ProduceArchiveSerializer.convertSendLogToKVBytes(log);
                 logList.add(pair);
 
-                Pair<byte[], byte[]> pair4BizId = ArchiveSerializer.convertSendLogToKVBytes4BizId(log);
+                Pair<byte[], byte[]> pair4BizId = ArchiveSerializer.ProduceArchiveSerializer.convertSendLogToKVBytes4BizId(log);
                 logList.add(pair4BizId);
 
             }
@@ -235,9 +235,9 @@ public class HBaseStore implements ArchiveStore {
             for (Pair<byte[], byte[]> pair : scan) {
                 SendLog log;
                 if (hasBizId) {
-                    log = ArchiveSerializer.readSendLog4BizId(pair);
+                    log = ArchiveSerializer.ProduceArchiveSerializer.readSendLog4BizId(pair);
                 } else {
-                    log = ArchiveSerializer.readSendLog(pair);
+                    log = ArchiveSerializer.ProduceArchiveSerializer.readSendLog(pair);
                 }
 
                 log.setClientIpStr(toIpString(log.getClientIp()));
@@ -420,7 +420,7 @@ public class HBaseStore implements ArchiveStore {
 
             Pair<byte[], byte[]> bytes = hBaseClient.getKV(namespace, sendLogTable, cf, col, bytesRowKey);
 
-            SendLog log = ArchiveSerializer.readSendLog(bytes);
+            SendLog log = ArchiveSerializer.ProduceArchiveSerializer.readSendLog(bytes);
 
             StringBuilder clientIp = new StringBuilder();
             IpUtil.toAddress(log.getClientIp(), clientIp);
@@ -467,7 +467,7 @@ public class HBaseStore implements ArchiveStore {
             List<Pair<byte[], byte[]>> scan = hBaseClient.scan(namespace, scanParameters);
 
             for (Pair<byte[], byte[]> pair : scan) {
-                ConsumeLog log = ArchiveSerializer.readConsumeLog(pair);
+                ConsumeLog log = ArchiveSerializer.ConsumeArchiveSerializer.readConsumeLog(pair);
                 log.setMessageId(ArchiveSerializer.byteArrayToHexStr(log.getBytesMessageId()));
 
                 StringBuilder clientIp = new StringBuilder();

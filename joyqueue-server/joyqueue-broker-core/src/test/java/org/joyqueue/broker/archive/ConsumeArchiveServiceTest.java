@@ -23,6 +23,7 @@ import org.joyqueue.domain.Broker;
 import org.joyqueue.exception.JoyQueueException;
 import org.joyqueue.server.archive.store.api.ArchiveStore;
 import org.joyqueue.server.archive.store.model.ConsumeLog;
+import org.joyqueue.server.archive.store.utils.ArchiveSerializer;
 import org.joyqueue.toolkit.concurrent.LoopThread;
 import org.joyqueue.toolkit.config.Property;
 import org.joyqueue.toolkit.config.PropertySupplier;
@@ -81,7 +82,7 @@ public class ConsumeArchiveServiceTest {
             consumeLog.setClientIp(new byte[16]);
             consumeLog.setConsumeTime(SystemClock.now());
             consumeLog.setApp(appArr[i % 3]);
-            ByteBuffer buffer = ArchiveSerializer.write(consumeLog);
+            ByteBuffer buffer = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(consumeLog);
             archiveMappedFileRepository.append(buffer);
         }
 
@@ -108,7 +109,7 @@ public class ConsumeArchiveServiceTest {
                     consumeLog.setClientIp(new byte[16]);
                     consumeLog.setConsumeTime(System.currentTimeMillis());
                     consumeLog.setApp(appArr[i1 % 3]);
-                    ByteBuffer buffer = ArchiveSerializer.write(consumeLog);
+                    ByteBuffer buffer = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(consumeLog);
                     archiveMappedFileRepository.append(buffer);
                 }
             }, "write-thread-" + i).start();
@@ -128,7 +129,7 @@ public class ConsumeArchiveServiceTest {
             consumeLog.setClientIp(new byte[16]);
             consumeLog.setConsumeTime(SystemClock.now());
             consumeLog.setApp(appArr[i % 3]);
-            ByteBuffer buffer = ArchiveSerializer.write(consumeLog);
+            ByteBuffer buffer = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(consumeLog);
             archiveMappedFileRepository.append(buffer);
         }
 
@@ -141,7 +142,7 @@ public class ConsumeArchiveServiceTest {
             consumeLog.setClientIp(new byte[16]);
             consumeLog.setConsumeTime(SystemClock.now());
             consumeLog.setApp(appArr[i % 3]);
-            ByteBuffer buffer = ArchiveSerializer.write(consumeLog);
+            ByteBuffer buffer = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(consumeLog);
             archiveMappedFileRepository.append(buffer);
         }
 
@@ -155,7 +156,7 @@ public class ConsumeArchiveServiceTest {
         for (int i = 0; i < 200; i++) {
             byte[] bytes = archiveMappedFileRepository.readOne();
             if (bytes.length > 0) {
-                ConsumeLog read = ArchiveSerializer.read(ByteBuffer.wrap(bytes));
+                ConsumeLog read = ArchiveSerializer.ConsumeArchiveSerializer.readConsumeLog(ByteBuffer.wrap(bytes));
                 Assert.assertEquals(i, read.getBrokerId());
             }
         }
@@ -172,7 +173,7 @@ public class ConsumeArchiveServiceTest {
             byte[] bytes = archiveMappedFileRepository.readOne();
             if (bytes.length > 0) {
                 brokerid = i;
-                ConsumeLog read = ArchiveSerializer.read(ByteBuffer.wrap(bytes));
+                ConsumeLog read = ArchiveSerializer.ConsumeArchiveSerializer.readConsumeLog(ByteBuffer.wrap(bytes));
                 try {
                     Assert.assertEquals(brokerid, read.getBrokerId());
                 } catch (Throwable e) {
@@ -311,7 +312,7 @@ public class ConsumeArchiveServiceTest {
                 // 1个字节开始符号，4个字节int类型长度信息
                 readByteCounter.addAndGet(1 + 4 + bytes.length);
                 // 反序列花并放入集合
-                list.add(ArchiveSerializer.read(ByteBuffer.wrap(bytes)));
+                list.add(ArchiveSerializer.ConsumeArchiveSerializer.readConsumeLog(ByteBuffer.wrap(bytes)));
             } else {
                 break;
             }
@@ -355,7 +356,7 @@ public class ConsumeArchiveServiceTest {
                 int msgLen = map.getInt();
                 byte[] bytes = new byte[msgLen];
                 map.get(bytes);
-                ConsumeLog log = ArchiveSerializer.read(ByteBuffer.wrap(bytes));
+                ConsumeLog log = ArchiveSerializer.ConsumeArchiveSerializer.readConsumeLog(ByteBuffer.wrap(bytes));
                 System.out.println(log);
             }
         } while (!find);
