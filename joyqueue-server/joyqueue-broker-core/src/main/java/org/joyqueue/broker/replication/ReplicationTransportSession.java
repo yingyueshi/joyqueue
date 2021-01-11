@@ -33,7 +33,7 @@ public class ReplicationTransportSession {
     protected static final Logger logger = LoggerFactory.getLogger(ReplicationTransportSession.class);
 
     // TODO 参数化
-    private static final long RECONNECT_INTERVAL = 1000 * 60;
+    private static final long RECONNECT_INTERVAL = 1000 * 6;
 
     private TransportClient transportClient;
     private Transport transport;

@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -220,8 +221,19 @@ public class HBaseClient implements LifeCycle {
         public void setFilter(Filter filter) {
             this.filter = filter;
         }
+
+        @Override
+        public String toString() {
+            return "ScanParameters{" +
+                    "tableName='" + tableName + '\'' +
+                    ", cf=" + Arrays.toString(cf) +
+                    ", col=" + Arrays.toString(col) +
+                    ", startRowKey=" + Arrays.toString(startRowKey) +
+                    ", stopRowKey=" + Arrays.toString(stopRowKey) +
+                    ", rowCount=" + rowCount +
+                    ", filter=" + filter +
+                    '}';
+        }
     }
-
-
 
 }

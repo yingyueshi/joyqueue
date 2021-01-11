@@ -16,6 +16,8 @@
 package org.joyqueue.broker.election;
 
 import org.joyqueue.broker.monitor.BrokerMonitor;
+import org.joyqueue.broker.monitor.stat.ReplicationStat;
+import org.joyqueue.toolkit.time.SystemClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,5 +39,11 @@ public class BrokerMonitorStub extends BrokerMonitor {
         logger.debug("Monitor append replicate message of topic {} partition group {}, " +
                 "count is {}, size is {}, time is {}",
                 topic, partitionGroup, count, size, time);
+    }
+
+    @Override
+    public void onReplicaStateChange(String topic, int partitionGroup, ElectionNode.State newState) {
+        logger.debug("Monitor replica state changeof topic {} partition group {}, state is {}",
+                topic, partitionGroup, newState);
     }
 }

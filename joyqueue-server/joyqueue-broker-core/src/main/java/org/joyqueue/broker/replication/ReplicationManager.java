@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
@@ -91,7 +92,7 @@ public class ReplicationManager extends Service {
         clientConfig.setIoThread(32);
         clientConfig.setSocketBufferSize(1024 * 1024 * 1);
         clientConfig.setConnectionTimeout(300 * 1);
-        clientConfig.getRetryPolicy().setRetryDelay(1000 * 60);
+        clientConfig.getRetryPolicy().setRetryDelay(1000 * 6);
         transportClient = new BrokerTransportClientFactory().create(clientConfig);
         transportClient.start();
 
@@ -109,10 +110,17 @@ public class ReplicationManager extends Service {
                     ConcurrentHashMap<TopicPartitionGroup, ReplicaGroup> replicaGroups = ReplicationManager.this.replicaGroups;
                     int replicaGroupCount = 0;
                     int replicaLeaderCount = 0;
-                    for (ReplicaGroup replicaGroup : replicaGroups.values()) {
+                    for (Map.Entry<TopicPartitionGroup, ReplicaGroup> entry : replicaGroups.entrySet()) {
+                        ReplicaGroup replicaGroup = entry.getValue();
                         replicaGroupCount++;
                         if (replicaGroup.isLeader()) {
                             replicaLeaderCount++;
+                            logger.info("Partition group {} flush error times is {}",
+                                    entry.getKey(), replicaGroup.getStoreFlushErrorTimes());
+                            if (replicaGroup.getStoreFlushErrorTimes() > 0) {
+                                logger.info("Partition group {} have flush error times is {}",
+                                        entry.getKey(), replicaGroup.getStoreFlushErrorTimes());
+                            }
                         }
                     }
                     logger.info("ReplicationManager, managed replica group count {} ,leader count {} , replicate queue capacity is {}, current size is {}",

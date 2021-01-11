@@ -162,7 +162,8 @@ public class ElectionCommandCodecTest {
     public void testReplicateConsumePosRequestCodec() throws Exception {
         Map<ConsumePartition, Position> consumePositions = new HashMap<>();
         consumePositions.put(new ConsumePartition("logbook18-HT", "logbookApi.lgbk18", Short.valueOf("0")), new Position(-1,-1,-1,-1));
-        ReplicateConsumePosRequest request = new ReplicateConsumePosRequest(consumePositions);
+        ReplicateConsumePosRequest request = new ReplicateConsumePosRequest();
+        request.setConsumePositions(consumePositions);
         request.setHeader(new JoyQueueHeader());
 
         ReplicateConsumePosRequestEncoder encoder = new ReplicateConsumePosRequestEncoder();
