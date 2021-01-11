@@ -118,6 +118,10 @@ public class ArchiveConfig {
         return PropertySupplier.getValue(propertySupplier, ArchiveConfigKey.ARCHIVE_BACKLOG_ENABLE);
     }
 
+    public int getIdleDuration() {
+        return PropertySupplier.getValue(propertySupplier, ArchiveConfigKey.ARCHIVE_IDLE_DURATION);
+    }
+
     public int getLogRetainDuration() {
         return PropertySupplier.getValue(propertySupplier, ArchiveConfigKey.ARCHIVE_LOG_RETAIN_DURATION);
     }

@@ -50,13 +50,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -426,26 +420,45 @@ public class ProduceArchiveService extends Service {
             if (readBatchSize> 0) {
                 // 提交任务
                 executorService.submit(() -> {
-                    try {
-                        // 写入存储
-                        archiveStore.putSendLog(sendLogs, tracer);
-                        if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_PRODUCE_PREFIX, clusterManager.getBrokerId().toString())) {
-                            logger.info("Produce-archive: write sendLogs size:{} to archive store. sample log: {}", sendLogs.size(), sendLogs.get(0));
+                    int count = archiveConfig.getStoreFialedRetryCount();
+                    do {
+                        try {
+                            // 写入存储
+                            archiveStore.putSendLog(sendLogs, tracer);
+                            if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_PRODUCE_PREFIX, clusterManager.getBrokerId().toString())) {
+                                logger.info("Produce-archive: write sendLogs size:{} to archive store. sample log: {}", sendLogs.size(), sendLogs.get(0));
+                            }
+                            // 写入计数（用于归档位置）
+                            writeCounter(sendLogs);
+                        } catch (JoyQueueException e) {
+                            logger.error("Produce-archive: write sendLogs error: {}", e);
+                            if (--count == 0) {
+                                // 写入存储失败
+                                hasStoreError.set(true);
+                                if (readMsgThread.isStarted()) {
+                                    archiveQueue.clear();
+                                    readMsgThread.stop();
+                                }
+                                // 回滚读取位置
+                                rollBackReadIndex(sendLogs);
+                                break;
+                            }
+                            try {
+                                Thread.sleep(new Random().nextInt(count) * 1000);
+                            } catch (InterruptedException e1) {
+                                e1.printStackTrace();
+                            }
                         }
-                        // 写入计数（用于归档位置）
-                        writeCounter(sendLogs);
-                    } catch (JoyQueueException e) {
-                        logger.error("Produce-archive: write sendLogs error: {}", e);
-                        // 写入存储失败
-                        hasStoreError.set(true);
-                        // 回滚读取位置
-                        rollBackReadIndex(sendLogs);
-                    }
+                    } while (count > 0);
                 });
             }
-            if (hasStoreError.getAndSet(false)) {
+            if (hasStoreError.getAndSet(false) || !readMsgThread.isStarted()) {
                 // 操作存储失败，等待1000ms
                 Thread.sleep(1000);
+                if (!readMsgThread.isStarted()) {
+                    archiveQueue.clear();
+                    readMsgThread.start();
+                }
             }
         }while(readBatchSize==batchNum);
     }
