@@ -24,6 +24,7 @@ import org.joyqueue.monitor.PointTracer;
 import org.joyqueue.server.archive.store.model.*;
 import org.joyqueue.server.archive.store.query.QueryCondition;
 import org.joyqueue.server.archive.store.utils.ArchiveSerializer;
+import org.joyqueue.server.archive.utils.HBaseSerializer;
 import org.joyqueue.toolkit.lang.Pair;
 import org.joyqueue.toolkit.network.IpUtil;
 import org.joyqueue.toolkit.security.Md5;
@@ -140,19 +141,10 @@ public class HBaseStore implements ArchiveStore {
         try {
             List<Pair<byte[], byte[]>> logList = new LinkedList<>();
             for (SendLog log : sendLogList) {
-
-                int topicId = topicAppMapping.getTopicId(log.getTopic());
-                int appId = topicAppMapping.getAppId(log.getApp());
-
-                log.setTopicId(topicId);
-                log.setAppId(appId);
-
-                Pair<byte[], byte[]> pair = ArchiveSerializer.ProduceArchiveSerializer.convertSendLogToKVBytes(log);
-                logList.add(pair);
-
-                Pair<byte[], byte[]> pair4BizId = ArchiveSerializer.ProduceArchiveSerializer.convertSendLogToKVBytes4BizId(log);
-                logList.add(pair4BizId);
-
+                Pair<Pair<byte[], byte[]>, Pair<byte[], byte[]>> kvBytes = ArchiveSerializer.ProduceArchiveSerializer.convertSendLogToKVBytes(log);
+                // triple: sendlogkey, sendlogvalue, sendlog4bizIdkey
+                logList.add(new Pair<>(kvBytes.getKey().getKey(), kvBytes.getKey().getValue()));
+                logList.add(new Pair<>(kvBytes.getValue().getKey(), kvBytes.getValue().getValue()));
             }
             // 写HBASE
             hBaseClient.put(namespace, sendLogTable, cf, col, logList);
@@ -224,29 +216,23 @@ public class HBaseStore implements ArchiveStore {
             throw new JoyQueueException(JoyQueueCode.CN_SERVICE_NOT_AVAILABLE, "hBaseClient is null");
         }
         List<SendLog> logList = new LinkedList<>();
-        // 查询发送日志（rowkey=topicId+sendTime+businessId）
+        logger.info("scan sendlog query: {}", query);
         try {
             HBaseClient.ScanParameters scanParameters = buildScanParameters(query);
             List<Pair<byte[], byte[]>> scan = hBaseClient.scan(namespace, scanParameters);
-
             QueryCondition queryCondition = query.getQueryCondition();
             String businessId = queryCondition.getStartRowKey().getBusinessId();
             boolean hasBizId = StringUtils.isNotEmpty(businessId);
             for (Pair<byte[], byte[]> pair : scan) {
                 SendLog log;
                 if (hasBizId) {
-                    log = ArchiveSerializer.ProduceArchiveSerializer.readSendLog4BizId(pair);
+                    Pair<byte[], byte[]> bytes = hBaseClient.getKV(namespace, sendLogTable, cf, col, ArchiveSerializer.ProduceArchiveSerializer.convert4BizIdKey(pair));
+                    log = ArchiveSerializer.ProduceArchiveSerializer.readSendLog(bytes);
                 } else {
                     log = ArchiveSerializer.ProduceArchiveSerializer.readSendLog(pair);
                 }
-
                 log.setClientIpStr(toIpString(log.getClientIp()));
                 log.setRowKeyStart(ArchiveSerializer.byteArrayToHexStr(pair.getKey()));
-                String topicName = topicAppMapping.getTopicName(log.getTopicId());
-                log.setTopic(topicName);
-
-                String appName = topicAppMapping.getAppName(log.getAppId());
-                log.setApp(appName);
                 logList.add(log);
             }
         } catch (Exception e) {
@@ -311,96 +297,17 @@ public class HBaseStore implements ArchiveStore {
         if (startRowKeyByteArr != null) {
             scanParameters.setStartRowKey(startRowKeyByteArr);
         } else {
-            scanParameters.setStartRowKey(createRowKey(queryCondition.getStartRowKey()));
+            scanParameters.setStartRowKey(
+                    ArchiveSerializer.ProduceArchiveSerializer.createRowKey(
+                            ArchiveSerializer.ProduceArchiveSerializer.MAGIC_SALT_START, queryCondition.getStartRowKey()));
         }
-        scanParameters.setStopRowKey(createRowKey(queryCondition.getStopRowKey()));
+        scanParameters.setStopRowKey(
+                ArchiveSerializer.ProduceArchiveSerializer.createRowKey(
+                        ArchiveSerializer.ProduceArchiveSerializer.MAGIC_SALT_STOP, queryCondition.getStopRowKey()));
 
-        /**
-         * cbase性能不满足模糊匹配，所以暂时去掉
-         */
-        // scanParameters.setFilter(createFilter(queryCondition.getStartRowKey(), createRowKey(queryCondition.getStartRowKey())));
+        scanParameters.setFilter(HBaseSerializer.createFilterList(queryCondition));
 
         return scanParameters;
-    }
-
-    /**
-     * 构建 rowkey
-     *
-     * @param rowKey
-     * @return
-     * @throws GeneralSecurityException
-     * @throws JoyQueueException
-     */
-    private byte[] createRowKey(QueryCondition.RowKey rowKey) throws GeneralSecurityException, JoyQueueException {
-        // 4 + 8 + 16 + 16
-        ByteBuffer allocate = ByteBuffer.allocate(44);
-
-        int topicId = topicAppMapping.getTopicId(rowKey.getTopic());
-        long crateTime = rowKey.getTime();
-        String businessId = rowKey.getBusinessId();
-        String messageId = rowKey.getMessageId();
-
-        allocate.putInt(topicId);
-        if (StringUtils.isNotEmpty(businessId)) {
-            allocate.put(Md5.INSTANCE.encrypt(businessId.getBytes(), null));
-            allocate.putLong(crateTime);
-        } else {
-            allocate.putLong(crateTime);
-            // 没有businessId填充16个字节
-            allocate.put(new byte[16]);
-        }
-        if (messageId != null) {
-            allocate.put(new BigInteger(messageId, 16).toByteArray());
-        } else {
-            // 没有messageId填充16个字节
-            allocate.put(new byte[16]);
-        }
-
-        return allocate.array();
-    }
-
-    private Filter createFilter(QueryCondition.RowKey rowKey, byte[] startRowKey) {
-        String businessId = rowKey.getBusinessId();
-        if (StringUtils.isNotEmpty(businessId)) {
-            List<org.apache.hadoop.hbase.util.Pair<byte[], byte[]>> fuzzyKeysData = new LinkedList<>();
-            org.apache.hadoop.hbase.util.Pair<byte[], byte[]> pair = new org.apache.hadoop.hbase.util.Pair<>();
-
-            // 时间任意
-            for (int i = 4; i < 12; i++) {
-                startRowKey[i] = Bytes.toBytes("?")[0];
-            }
-            // messageId任意
-            for (int i = 28; i < 44; i++) {
-                startRowKey[i] = Bytes.toBytes("?")[0];
-            }
-
-            pair.setFirst(startRowKey);
-
-            byte fixed = 0x0; //必须匹配
-            byte unFixed = 0x1; //不用匹配
-
-            ByteBuffer allocate = ByteBuffer.allocate(44);
-            for (int i = 0; i < 4; i++) {
-                allocate.put(fixed);
-            }
-            for (int i = 0; i < 8; i++) {
-                allocate.put(unFixed);
-            }
-            for (int i = 0; i < 16; i++) {
-                allocate.put(fixed);
-            }
-            for (int i = 0; i < 16; i++) {
-                allocate.put(unFixed);
-            }
-
-            pair.setSecond(allocate.array());
-
-            fuzzyKeysData.add(pair);
-
-            Filter filter = new FuzzyRowFilter(fuzzyKeysData);
-            return filter;
-        }
-        return null;
     }
 
     @Override
@@ -409,28 +316,14 @@ public class HBaseStore implements ArchiveStore {
         QueryCondition.RowKey rowKey = queryCondition.getRowKey();
 
         try {
-            // 4 + 8 + 16 + 16
-            ByteBuffer allocate = ByteBuffer.allocate(44);
-            allocate.putInt(topicAppMapping.getTopicId(rowKey.getTopic()));
-            allocate.putLong(rowKey.getTime());
-            allocate.put(Md5.INSTANCE.encrypt(rowKey.getBusinessId().getBytes(Charset.forName("utf-8")), null));
-            allocate.put(ArchiveSerializer.hexStrToByteArray(rowKey.getMessageId()));
-            // rowKey
-            byte[] bytesRowKey = allocate.array();
+            byte[] bytesRowKey = ArchiveSerializer.ProduceArchiveSerializer.bytesRowKey(rowKey);
 
             Pair<byte[], byte[]> bytes = hBaseClient.getKV(namespace, sendLogTable, cf, col, bytesRowKey);
-
             SendLog log = ArchiveSerializer.ProduceArchiveSerializer.readSendLog(bytes);
 
             StringBuilder clientIp = new StringBuilder();
             IpUtil.toAddress(log.getClientIp(), clientIp);
             log.setClientIpStr(clientIp.toString());
-
-            String topicName = topicAppMapping.getTopicName(log.getTopicId());
-            log.setTopic(topicName);
-
-            String appName = topicAppMapping.getAppName(log.getAppId());
-            log.setApp(appName);
 
             return log;
         } catch (Exception e) {
@@ -439,6 +332,7 @@ public class HBaseStore implements ArchiveStore {
     }
 
     private static final byte endFlag = 58; // 结束符
+
     @Override
     public List<ConsumeLog> scanConsumeLog(String messageId, Integer count) throws JoyQueueException {
         if (hBaseClient == null) {

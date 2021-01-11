@@ -1,10 +1,16 @@
 package org.joyqueue.server.archive.store.utils;
 
+import com.google.common.hash.Hashing;
+import org.apache.commons.lang3.StringUtils;
+import org.joyqueue.exception.JoyQueueException;
 import org.joyqueue.server.archive.store.model.ConsumeLog;
 import org.joyqueue.server.archive.store.model.SendLog;
+import org.joyqueue.server.archive.store.query.QueryCondition;
 import org.joyqueue.toolkit.lang.Pair;
 import org.joyqueue.toolkit.security.Md5;
 
+import java.io.IOException;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.security.GeneralSecurityException;
@@ -165,81 +171,102 @@ public class ArchiveSerializer {
         return new StringBuffer(reverseStr).reverse().toString();
     }
 
-    public static class ProduceArchiveSerializer {
-        /**
-         * key: topicId(4) + sendTime(8) + businessId(16) + messageId(16) 总长度：44
-         * value: brokerId(4) + appId(4) + clientIp(16) + sendTime(8) + compassType(2) + messageBody(变长) + businessId(变长)
-         *
-         * @param sendLog
-         * @return
-         */
-        public static Pair<byte[], byte[]> convertSendLogToKVBytes(SendLog sendLog) throws GeneralSecurityException {
-            ByteBuffer bufferKey = ByteBuffer.allocate(44);
-            bufferKey.putInt(sendLog.getTopicId());
-            bufferKey.putLong(sendLog.getSendTime());
-            bufferKey.put(Md5.INSTANCE.encrypt(sendLog.getBusinessId().getBytes(Charset.forName("utf-8")), null));
-            bufferKey.put(md5(sendLog.getMessageId(), null));
+    public static byte[] intToByteArray(int i) {
+        byte[] result = new byte[4];
+        result[0] = (byte)((i >> 24) & 0xFF);
+        result[1] = (byte)((i >> 16) & 0xFF);
+        result[2] = (byte)((i >> 8) & 0xFF);
+        result[3] = (byte)(i & 0xFF);
+        return result;
+    }
 
+    public static byte intToByte(int i) {
+        byte[] result = new byte[1];
+        result[0] = (byte)(i & 0xFF);
+        return result[0];
+    }
 
-            // value
-            byte[] messageBody = sendLog.getMessageBody();
-            byte[] businessIdBytes = sendLog.getBusinessId().getBytes(Charset.forName("utf-8"));
-            int size = 4 + 4 + 16 + 8 + 2 + 4 + messageBody.length + 4 + businessIdBytes.length;
-            ByteBuffer bufferVal = ByteBuffer.allocate(size);
-            bufferVal.putInt(sendLog.getBrokerId());
-            bufferVal.putInt(sendLog.getAppId());
-
-            // clientIP
-            byte[] clientIpBytes16 = new byte[16];
-            byte[] clientIpBytes = sendLog.getClientIp();
-            System.arraycopy(clientIpBytes, 0, clientIpBytes16, 0, Math.min(clientIpBytes.length, clientIpBytes16.length));
-            bufferVal.put(clientIpBytes16);
-
-            bufferVal.putShort(sendLog.getCompressType());
-            bufferVal.putInt(messageBody.length);
-            bufferVal.put(messageBody);
-            bufferVal.putInt(businessIdBytes.length);
-            bufferVal.put(businessIdBytes);
-
-            return new Pair<>(bufferKey.array(), bufferVal.array());
+    public static String Byte2String(byte nByte) {
+        StringBuilder nStr = new StringBuilder();
+        for (int i = 7; i >= 0; i--) {
+            int j = (int) nByte & (int) (Math.pow(2, (double) i));
+            if (j > 0) {
+                nStr.append("1");
+            } else {
+                nStr.append("0");
+            }
         }
+        return nStr.toString();
+    }
+
+    public static int generateMurmurHash(String seed) {
+        return Hashing.murmur3_32().hashString(seed, Charset.forName("utf-8")).hashCode();
+    }
+
+    public static class ProduceArchiveSerializer {
+        public static final int MAGIC_SALT = 256;
+        public static final int MAGIC_SALT_START = 0;
+        public static final int MAGIC_SALT_STOP = 255;
 
         /**
-         * key: topicId(4) + businessId(16) + sendTime(8) + messageId(16) 总长度：44
-         * value: brokerId(4) + appId(4) + clientIp(16) + sendTime(8) + compassType(2) + messageBody(变长) + businessId(变长)
+         * key: salt(1) + topic(16) + sendTime(8) + businessId(16) + messageId(16) 总长度：57
+         * key: topic(16) + businessId(16) + sendTime(8) + messageId(16) 总长度：56
+         * value: brokerId(4) + topic(变长) + app(变长) + clientIp(16) + compassType(2) + messageBody(变长) + businessId(变长)
          *
          * @param sendLog
          * @return
          */
-        public static Pair<byte[], byte[]> convertSendLogToKVBytes4BizId(SendLog sendLog) throws GeneralSecurityException {
-            ByteBuffer bufferKey = ByteBuffer.allocate(44);
-            bufferKey.putInt(sendLog.getTopicId());
-            bufferKey.put(Md5.INSTANCE.encrypt(sendLog.getBusinessId().getBytes(Charset.forName("utf-8")), null));
-            bufferKey.putLong(sendLog.getSendTime());
-            bufferKey.put(md5(sendLog.getMessageId(), null));
+        public static Pair<Pair<byte[], byte[]>, Pair<byte[], byte[]>> convertSendLogToKVBytes(SendLog sendLog) throws GeneralSecurityException {
+            byte[] messageIdBytes = md5(sendLog.getMessageId(),null);
 
+            //key: salt(1) + topic(16) + sendTime(8) + businessId(16) + messageId(16) 总长度：57
+            ByteBuffer bufferKey = ByteBuffer.allocate(57);
+
+            String key = sendLog.getTopic() + sendLog.getSendTime() + sendLog.getBusinessId() + byteArrayToHexStr(messageIdBytes);
+            int hashcode = generateMurmurHash(key);
+            byte salt = intToByte(Math.abs(hashcode) % MAGIC_SALT);
+            bufferKey.put(salt);
+            bufferKey.put(md5(sendLog.getTopic(), null));
+            bufferKey.putLong(sendLog.getSendTime());
+            bufferKey.put(md5(sendLog.getBusinessId(), null));
+            bufferKey.put(messageIdBytes);
+
+            // key: topicId(16) + businessId(16) + sendTime(8) + messageId(16) 总长度：56
+            ByteBuffer bizIdKey = ByteBuffer.allocate(56);
+            bizIdKey.put(md5(sendLog.getTopic(), null));
+            bizIdKey.put(md5(sendLog.getBusinessId(), null));
+            bizIdKey.putLong(sendLog.getSendTime());
+            bizIdKey.put(messageIdBytes);
 
             // value
+            byte[] topic = sendLog.getTopic().getBytes(Charset.forName("utf-8"));
+            byte[] app = sendLog.getApp().getBytes(Charset.forName("utf-8"));
             byte[] messageBody = sendLog.getMessageBody();
             byte[] businessIdBytes = sendLog.getBusinessId().getBytes(Charset.forName("utf-8"));
-            int size = 4 + 4 + 16 + 8 + 2 + 4 + messageBody.length + 4 + businessIdBytes.length;
+            int size = 4 + (4 + topic.length) + (4 + app.length) + 16 + 2 + (4 + messageBody.length) + (4 + businessIdBytes.length);
             ByteBuffer bufferVal = ByteBuffer.allocate(size);
             bufferVal.putInt(sendLog.getBrokerId());
-            bufferVal.putInt(sendLog.getAppId());
+
+            bufferVal.putInt(topic.length);
+            bufferVal.put(topic);
+            bufferVal.putInt(app.length);
+            bufferVal.put(app);
 
             // clientIP
             byte[] clientIpBytes16 = new byte[16];
             byte[] clientIpBytes = sendLog.getClientIp();
-            System.arraycopy(clientIpBytes, 0, clientIpBytes16, 0, Math.min(clientIpBytes.length, clientIpBytes16.length));
+            System.arraycopy(clientIpBytes, 0, clientIpBytes16,0, Math.min(clientIpBytes.length, clientIpBytes16.length));
             bufferVal.put(clientIpBytes16);
 
             bufferVal.putShort(sendLog.getCompressType());
+
             bufferVal.putInt(messageBody.length);
             bufferVal.put(messageBody);
             bufferVal.putInt(businessIdBytes.length);
             bufferVal.put(businessIdBytes);
 
-            return new Pair<>(bufferKey.array(), bufferVal.array());
+            return new Pair<>(new Pair<>(bufferKey.array(), bufferVal.array()),
+                    new Pair<>(bizIdKey.array(), new byte[] {salt}));
         }
 
         public static SendLog readSendLog(Pair<byte[], byte[]> pair) {
@@ -247,8 +274,11 @@ public class ArchiveSerializer {
 
             byte[] key = pair.getKey();
             ByteBuffer wrap = ByteBuffer.wrap(key);
-            // 主题ID
-            log.setTopicId(wrap.getInt());
+            //salt
+            wrap.get();
+            // 主题（MD5后的）
+            byte[] topicMD5 = new byte[16];
+            wrap.get(topicMD5);
             // 发送时间
             log.setSendTime(wrap.getLong());
             // 业务主键（MD5后的）
@@ -260,12 +290,22 @@ public class ArchiveSerializer {
             log.setBytesMessageId(messageId);
             log.setMessageId(byteArrayToHexStr(messageId));
 
+            //int size = 4 + (4 + topic.length) + (4 + app.length) + 16 + 2 + (4 + messageBody.length) + (4 + businessIdBytes.length);
             byte[] value = pair.getValue();
             ByteBuffer valWrap = ByteBuffer.wrap(value);
             // brokerID
             log.setBrokerId(valWrap.getInt());
-            // 应用ID
-            log.setAppId(valWrap.getInt());
+
+            int topicLen = valWrap.getInt();
+            byte[] topic = new byte[topicLen];
+            valWrap.get(topic);
+            log.setTopic(new String(topic, Charset.forName("utf-8")));
+
+            int appLen = valWrap.getInt();
+            byte[] app = new byte[appLen];
+            valWrap.get(app);
+            log.setApp(new String(app, Charset.forName("utf-8")));
+
             // 客户端IP
             byte[] clientIp = new byte[16];
             valWrap.get(clientIp);
@@ -286,48 +326,86 @@ public class ArchiveSerializer {
             return log;
         }
 
-        public static SendLog readSendLog4BizId(Pair<byte[], byte[]> pair) {
-            SendLog log = new SendLog();
-
+        public static byte[] convert4BizIdKey(Pair<byte[], byte[]> pair) {
             byte[] key = pair.getKey();
-            ByteBuffer wrap = ByteBuffer.wrap(key);
-            // 主题ID
-            log.setTopicId(wrap.getInt());
-            // 业务主键（MD5后的）
+            ByteBuffer wrapKey = ByteBuffer.wrap(key);
+            byte[] topicMD5 = new byte[16];
+            wrapKey.get(topicMD5);
             byte[] businessId = new byte[16];
-            wrap.get(businessId);
-            // 发送时间
-            log.setSendTime(wrap.getLong());
-            // 消息ID（MD5后的）
+            wrapKey.get(businessId);
+            long time = wrapKey.getLong();
             byte[] messageId = new byte[16];
-            wrap.get(messageId);
-            log.setBytesMessageId(messageId);
-            log.setMessageId(byteArrayToHexStr(messageId));
+            wrapKey.get(messageId);
 
             byte[] value = pair.getValue();
-            ByteBuffer valWrap = ByteBuffer.wrap(value);
-            // brokerID
-            log.setBrokerId(valWrap.getInt());
-            // 应用ID
-            log.setAppId(valWrap.getInt());
-            // 客户端IP
-            byte[] clientIp = new byte[16];
-            valWrap.get(clientIp);
-            log.setClientIp(clientIp);
-            // 压缩类型
-            log.setCompressType(valWrap.getShort());
-            // 消息体
-            int msgBodySize = valWrap.getInt();
-            byte[] messageBody = new byte[msgBodySize];
-            valWrap.get(messageBody);
-            log.setMessageBody(messageBody);
-            // 业务主键
-            int bizSize = valWrap.getInt();
-            byte[] businessIdBytes = new byte[bizSize];
-            valWrap.get(businessIdBytes);
-            log.setBusinessId(new String(businessIdBytes, Charset.forName("utf-8")));
+            ByteBuffer wrapValue = ByteBuffer.wrap(value);
+            byte salt = wrapValue.get();
 
-            return log;
+            // 1 + 16 + 8 + 16 + 16 = 57
+            ByteBuffer allocate = ByteBuffer.allocate(57);
+            allocate.put(salt);
+            allocate.put(topicMD5);
+            allocate.putLong(time);
+            allocate.put(businessId);
+            allocate.put(messageId);
+
+            return allocate.array();
+        }
+
+        public static byte[] createRowKey(int salt, QueryCondition.RowKey rowKey) throws GeneralSecurityException, JoyQueueException {
+            String topic = rowKey.getTopic();
+            long crateTime = rowKey.getTime();
+            String businessId = rowKey.getBusinessId();
+            String messageId = rowKey.getMessageId();
+
+            ByteBuffer allocate;
+
+            if (StringUtils.isNotEmpty(businessId)) {
+                // 16 + 16 + 8 + 16 = 56
+                allocate = ByteBuffer.allocate(56);
+
+                allocate.put(md5(topic, null));
+                allocate.put(md5(businessId, null));
+                allocate.putLong(crateTime);
+                if (messageId != null) {
+                    allocate.put(new BigInteger(messageId, 16).toByteArray());
+                } else {
+                    // 没有messageId填充16个字节
+                    allocate.put(new byte[16]);
+                }
+            } else {
+                // 1 + 16 + 8 + 16 + 16 = 57
+                allocate = ByteBuffer.allocate(57);
+
+                allocate.put(intToByte(salt));
+                allocate.put(md5(topic, null));
+                allocate.putLong(crateTime);
+                // 没有businessId填充16个字节
+                allocate.put(new byte[16]);
+                if (messageId != null) {
+                    allocate.put(new BigInteger(messageId, 16).toByteArray());
+                } else {
+                    // 没有messageId填充16个字节
+                    allocate.put(new byte[16]);
+                }
+            }
+
+            return allocate.array();
+        }
+
+        public static byte[] bytesRowKey(QueryCondition.RowKey rowKey) throws GeneralSecurityException {
+            String key = rowKey.getTopic() + rowKey.getTime() + rowKey.getBusinessId() + rowKey.getMessageId();
+            int hashcode = generateMurmurHash(key);
+            // 1 + 16 + 8 + 16 + 16 = 57
+            ByteBuffer allocate = ByteBuffer.allocate(57);
+            allocate.put(intToByte(Math.abs(hashcode) % MAGIC_SALT));
+            allocate.put(md5(rowKey.getTopic(), null));
+            allocate.putLong(rowKey.getTime());
+            allocate.put(md5(rowKey.getBusinessId(), null));
+            allocate.put(hexStrToByteArray(rowKey.getMessageId()));
+            // rowKey
+            byte[] bytesRowKey = allocate.array();
+            return bytesRowKey;
         }
     }
 

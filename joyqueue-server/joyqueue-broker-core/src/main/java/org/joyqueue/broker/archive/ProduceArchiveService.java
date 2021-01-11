@@ -445,8 +445,8 @@ public class ProduceArchiveService extends Service {
                             }
                             try {
                                 Thread.sleep(new Random().nextInt(count) * 1000);
-                            } catch (InterruptedException e1) {
-                                e1.printStackTrace();
+                            } catch (InterruptedException ie) {
+                                logger.error("Produce-archive: while sleep store error,", ie);
                             }
                         }
                     } while (count > 0);
