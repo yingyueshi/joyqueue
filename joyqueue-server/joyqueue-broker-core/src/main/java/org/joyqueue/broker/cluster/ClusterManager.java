@@ -836,7 +836,7 @@ public class ClusterManager extends Service {
      * @param topic 主题
      * @return
      */
-    public List<String> getAppByTopic(TopicName topic) {
+    public List<String> getConsumersByTopic(TopicName topic) {
         List<Consumer> consumerByTopic = nameService.getConsumerByTopic(topic);
         if (CollectionUtils.isEmpty(consumerByTopic)) {
             return new ArrayList<>(0);

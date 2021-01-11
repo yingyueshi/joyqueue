@@ -560,5 +560,4 @@ class PartitionConsumption extends Service {
         }
         return true;
     }
-
 }
