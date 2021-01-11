@@ -9,7 +9,6 @@ import org.joyqueue.server.archive.store.query.QueryCondition;
 import org.joyqueue.toolkit.lang.Pair;
 import org.joyqueue.toolkit.security.Md5;
 
-import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
