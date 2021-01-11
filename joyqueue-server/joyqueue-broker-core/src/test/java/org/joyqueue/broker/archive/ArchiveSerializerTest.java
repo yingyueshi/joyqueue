@@ -15,10 +15,11 @@
  */
 package org.joyqueue.broker.archive;
 
-import org.joyqueue.broker.archive.ArchiveSerializer;
 import org.joyqueue.server.archive.store.model.ConsumeLog;
+import org.joyqueue.server.archive.store.utils.ArchiveSerializer;
 import org.joyqueue.toolkit.time.SystemClock;
 import org.apache.commons.lang.builder.ToStringBuilder;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -40,7 +41,7 @@ public class ArchiveSerializerTest {
 
         System.out.println(ToStringBuilder.reflectionToString(consumeLog));
 
-        ByteBuffer write = ArchiveSerializer.write(consumeLog);
+        ByteBuffer write = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(consumeLog);
         System.out.println(write.limit());
     }
 
@@ -54,12 +55,30 @@ public class ArchiveSerializerTest {
         consumeLog.setConsumeTime(SystemClock.now());
         System.out.println(ToStringBuilder.reflectionToString(consumeLog));
 
-        ByteBuffer write = ArchiveSerializer.write(consumeLog);
+        ByteBuffer write = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(consumeLog);
 
         int readLen = write.getInt();
         System.out.println(readLen);
-        ConsumeLog log = ArchiveSerializer.read(write);
+        ConsumeLog log = ArchiveSerializer.ConsumeArchiveSerializer.readConsumeLog(write);
         System.out.println(ToStringBuilder.reflectionToString(log));
 
+    }
+
+    @Test
+    public void reverseStringTest() {
+        String test = "abc";
+        Assert.assertEquals("cba",
+                org.joyqueue.server.archive.store.utils.ArchiveSerializer.reverse(test));
+    }
+
+    @Test
+    public void reverseBytesTest() {
+        String test = "abc";
+        byte[] bytes = test.getBytes();
+        Assert.assertEquals(new String(bytes),
+                new String(org.joyqueue.server.archive.store.utils.ArchiveSerializer.reverse(
+                        org.joyqueue.server.archive.store.utils.ArchiveSerializer.reverse(bytes)
+                ))
+        );
     }
 }
