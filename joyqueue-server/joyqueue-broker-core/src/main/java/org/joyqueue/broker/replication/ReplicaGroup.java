@@ -723,6 +723,10 @@ public class ReplicaGroup extends Service {
                     request.setGroup(topicPartitionGroup.getPartitionGroupId());
                     JoyQueueHeader header = new JoyQueueHeader(Direction.REQUEST, CommandType.REPLICATE_CONSUME_POS_REQUEST);
 
+                    if (electionConfig.enableV3Command()) {
+                        header.setVersion(JoyQueueHeader.VERSION_V3);
+                    }
+
                     if (logger.isDebugEnabled() || electionConfig.getOutputConsumePos()) {
                         logger.debug("Partition group {}/node {} send consume position {} to node {}",
                                 topicPartitionGroup, localReplicaId, consumePositions, replica.replicaId());

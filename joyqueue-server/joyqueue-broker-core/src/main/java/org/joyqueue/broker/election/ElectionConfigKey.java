@@ -55,6 +55,7 @@ public enum ElectionConfigKey implements PropertyDef {
     ENABLE_CHECK_FLUSH_ERROR("election.enable.check.flush.error", false, Type.BOOLEAN),
     FLUSH_ERROR_THRESHOLD("election.flush.error.threshold", 100, Type.LONG),
     ENABLE_CHECK_DUPLICATE_COMMAND("election.enable.check.duplicate.command", false, Type.BOOLEAN),
+    ENABLE_V3_COMMAND("election.enable.v3.command", true, Type.BOOLEAN),
     ;
 
     private String name;

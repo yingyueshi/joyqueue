@@ -365,6 +365,7 @@ public class RaftLeaderElectionTest {
             if (i > 0) Assert.assertEquals(messageLength[i], messageLength[i - 1]);
         }
     }
+
     @Test
     public void testReplication() throws Exception{
 
@@ -434,6 +435,31 @@ public class RaftLeaderElectionTest {
 
     }
 
+    @Test
+    public void testReplicationCosumePos() throws Exception{
+
+        List<Broker> allNodes = new LinkedList<>();
+        for (int i = 0; i < NODE_NUM; i++) {
+            allNodes.add(brokers[i]);
+        }
+
+        createElections(allNodes);
+
+        int leaderId = getLeader(leaderElections[0], 10);
+        Assert.assertNotEquals(leaderId, -1);
+        logger.info("Leader id is " + leaderId);
+
+        Thread.sleep(2000);
+
+        Assert.assertEquals(leaderId, leaderElections[1].getLeaderId());
+        Assert.assertEquals(leaderId, leaderElections[2].getLeaderId());
+
+
+
+        Thread.sleep(10000);
+
+
+    }
 
     @Test
     public void testCheckDuplicateCommand() throws Exception {

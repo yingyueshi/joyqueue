@@ -74,7 +74,7 @@ public class DefaultEncoder implements Encoder {
                     header.setVersion(JoyQueueHeader.VERSION_V2);
                     oldVersion = JoyQueueHeader.VERSION_V2;
                 } else {
-                    header.setVersion(JoyQueueHeader.CURRENT_VERSION);
+                    //header.setVersion(JoyQueueHeader.CURRENT_VERSION);
                 }
                 headerCodec.encode(header, buffer);
 
