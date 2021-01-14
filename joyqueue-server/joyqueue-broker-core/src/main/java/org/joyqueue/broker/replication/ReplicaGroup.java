@@ -250,6 +250,17 @@ public class ReplicaGroup extends Service {
         return Collections.unmodifiableList(replicas);
     }
 
+    public int getResponseQueueSize() {
+        if (replicateResponseQueue.size() > replicas.size()) {
+            logger.error("Partition group {}/node {} wrong response queue size is {}, replicas is {}",
+                    topicPartitionGroup, localReplicaId, replicateResponseQueue.size(), replicas.size());
+        }
+        return replicateResponseQueue.size();
+    }
+
+    public int getSessionCount() {
+        return sessions.size();
+    }
 
     /**
      * 设置当前节点状态
@@ -371,6 +382,14 @@ public class ReplicaGroup extends Service {
                         continue;
                     }
 
+                    if (electionConfig.enableCheckDuplicateCommand()) {
+                        if (isDumplicateCommand(command.replicaId)) {
+                            logger.info("Partition group {}/node {} command {} should ignore",
+                                    topicPartitionGroup, localReplicaId, command.replicaId());
+                            continue;
+                        }
+                    }
+
                     replicateMessage(getReplica(command.replicaId()));
                     maybeReplicateConsumePos(getReplica(command.replicaId()));
 
@@ -419,6 +438,20 @@ public class ReplicaGroup extends Service {
 
         getReplica(localReplicaId).writePosition(replicableStore.rightPosition());
         replicateResponseQueue.put(new DelayedCommand(delayTimeNs, localReplicaId));
+    }
+
+    // only for test
+    public void addTask(int replicaId) {
+        replicateResponseQueue.put(new DelayedCommand(ONE_MS_NANO, replicaId));
+    }
+
+    private boolean isDumplicateCommand(int replicaId) {
+        for (DelayedCommand delayedCommand : replicateResponseQueue) {
+            if (delayedCommand.replicaId == replicaId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -690,6 +723,10 @@ public class ReplicaGroup extends Service {
                     request.setGroup(topicPartitionGroup.getPartitionGroupId());
                     JoyQueueHeader header = new JoyQueueHeader(Direction.REQUEST, CommandType.REPLICATE_CONSUME_POS_REQUEST);
 
+                    if (electionConfig.enableV3Command()) {
+                        header.setVersion(JoyQueueHeader.VERSION_V3);
+                    }
+
                     if (logger.isDebugEnabled() || electionConfig.getOutputConsumePos()) {
                         logger.debug("Partition group {}/node {} send consume position {} to node {}",
                                 topicPartitionGroup, localReplicaId, consumePositions, replica.replicaId());
@@ -754,10 +791,10 @@ public class ReplicaGroup extends Service {
         int entriesLength = request.getEntries().remaining();
         boolean success = true;
 
-        logger.debug("Partition group {}/node {} receive append entries request {}, start position " +
+        logger.debug("Partition group {}/node {} receive append entries request {} from {}, start position " +
                         "is {}, write position is {}, commit position is {}",
-                topicPartitionGroup, localReplicaId, request, startPosition, replicableStore.rightPosition(),
-                replicableStore.commitPosition());
+                topicPartitionGroup, localReplicaId, request, request.getLeaderId(),
+                startPosition, replicableStore.rightPosition(), replicableStore.commitPosition());
         //noinspection ConstantConditions
         do {
             try {
@@ -799,17 +836,19 @@ public class ReplicaGroup extends Service {
                         request.getLeftPosition() > replicableStore.leftPosition()) {
                     replicableStore.clear(request.getStartPosition());
                     logger.info("Partition group {}/node {} clear, position is {}, write position is {}, " +
-                                    "left position is {}, elapse {} us",
+                                    "left position is {}, elapse {} us, entry length is {}",
                             topicPartitionGroup, localReplicaId, request.getStartPosition(),
-                            replicableStore.rightPosition(), request.getLeftPosition(), usTime() - startTimeUs);
+                            replicableStore.rightPosition(), request.getLeftPosition(),
+                            usTime() - startTimeUs, entriesLength);
 
                 } else  if (request.getStartPosition() != replicableStore.rightPosition()) {
                     replicableStore.setRightPosition(request.getStartPosition());
 
                     logger.info("Partition group {}/node {} set right position, position is {}, write position is {}, " +
-                                    "left position is {}, elapse {} us",
+                                    "left position is {}, elapse {} us, entry length is {}",
                             topicPartitionGroup, localReplicaId, request.getStartPosition(),
-                            replicableStore.rightPosition(), request.getLeftPosition(), usTime() - startTimeUs);
+                            replicableStore.rightPosition(), request.getLeftPosition(),
+                            usTime() - startTimeUs, entriesLength);
                 }
 
                 nextPosition = replicableStore.appendEntryBuffer(request.getEntries());

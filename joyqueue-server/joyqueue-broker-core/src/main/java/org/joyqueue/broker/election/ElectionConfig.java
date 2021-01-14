@@ -177,6 +177,14 @@ public class ElectionConfig {
         return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.FLUSH_ERROR_THRESHOLD);
     }
 
+    public boolean enableCheckDuplicateCommand() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_CHECK_DUPLICATE_COMMAND);
+    }
+
+    public boolean enableV3Command() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_V3_COMMAND);
+    }
+
     public void setListenPort(String port) {
         listenPort = Integer.valueOf(port);
     }
