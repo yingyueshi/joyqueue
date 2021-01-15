@@ -217,9 +217,9 @@ public class ArchiveSerializer {
     }
 
     public static class ProduceArchiveSerializer {
-        public static final int MAGIC_SALT = 256;
+        public static final int MAGIC_SALT = 16;
         public static final int MAGIC_SALT_START = 0;
-        public static final int MAGIC_SALT_STOP = 255;
+        public static final int MAGIC_SALT_STOP = 15;
 
         /**
          * randomkey:   salt(1) + topic(16) + sendTime(8) + businessId(16) + messageId(16) 总长度：57
@@ -414,6 +414,49 @@ public class ArchiveSerializer {
             return allocate.array();
         }
 
+        public static byte[] createRowKey(byte salt, QueryCondition.RowKey rowKey) throws GeneralSecurityException {
+            String topic = rowKey.getTopic();
+            long crateTime = rowKey.getTime();
+            String businessId = rowKey.getBusinessId();
+            String messageId = rowKey.getMessageId();
+
+            ByteBuffer allocate;
+
+            if (StringUtils.isNotEmpty(businessId)) {
+                // 16 + 16 + 8 + 16 = 56
+                allocate = ByteBuffer.allocate(56);
+
+                final byte[] topicMd5 = md5(topic, null);
+                final byte[] businessMd5 = md5(businessId, null);
+                allocate.put(xorOperation(topicMd5, businessMd5));
+                allocate.put(businessMd5);
+                allocate.putLong(crateTime);
+                if (messageId != null) {
+                    allocate.put(new BigInteger(messageId, 16).toByteArray());
+                } else {
+                    // 没有messageId填充16个字节
+                    allocate.put(new byte[16]);
+                }
+            } else {
+                // 1 + 16 + 8 + 16 + 16 = 57
+                allocate = ByteBuffer.allocate(57);
+
+                allocate.put(salt);
+                allocate.put(md5(topic, null));
+                allocate.putLong(crateTime);
+                // 没有businessId填充16个字节
+                allocate.put(new byte[16]);
+                if (messageId != null) {
+                    allocate.put(new BigInteger(messageId, 16).toByteArray());
+                } else {
+                    // 没有messageId填充16个字节
+                    allocate.put(new byte[16]);
+                }
+            }
+
+            return allocate.array();
+        }
+
         public static byte[] bytesRowKey(QueryCondition.RowKey rowKey) throws GeneralSecurityException {
             String key = rowKey.getTopic() + rowKey.getTime() + rowKey.getBusinessId() + rowKey.getMessageId();
             int hashcode = generateMurmurHash(key);
@@ -427,6 +470,12 @@ public class ArchiveSerializer {
             // rowKey
             byte[] bytesRowKey = allocate.array();
             return bytesRowKey;
+        }
+
+        public static int saltByRowKey(QueryCondition.RowKey rowKey) {
+            final String key = rowKey.getTopic() + rowKey.getTime() + rowKey.getBusinessId() + rowKey.getMessageId();
+            final int hashcode = generateMurmurHash(key);
+            return Math.abs(hashcode) % MAGIC_SALT;
         }
     }
 
