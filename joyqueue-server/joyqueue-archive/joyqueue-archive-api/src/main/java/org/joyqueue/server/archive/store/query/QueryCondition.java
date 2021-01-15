@@ -33,6 +33,7 @@ public class QueryCondition implements Query {
     private RowKey startRowKey; // 查询开始键
     private RowKey stopRowKey; // 查询结束键
     private int count;
+    private int queryCounter = 0;
 
     private RowKey rowKey; // 指定RowKey查询
 
@@ -79,12 +80,21 @@ public class QueryCondition implements Query {
         this.startRowKeyByteArr = bytes;
     }
 
+    public int getQueryCounter() {
+        return queryCounter;
+    }
+
+    public void setQueryCounter(int queryCounter) {
+        this.queryCounter = queryCounter;
+    }
+
     @Override
     public String toString() {
         return "QueryCondition{" +
                 "startRowKey=" + startRowKey +
                 ", stopRowKey=" + stopRowKey +
                 ", count=" + count +
+                ", queryCounter=" + queryCounter +
                 ", rowKey=" + rowKey +
                 ", startRowKeyByteArr=" + Arrays.toString(startRowKeyByteArr) +
                 '}';
@@ -98,6 +108,15 @@ public class QueryCondition implements Query {
         private long time;
         private String businessId;
         private String messageId;
+
+        public static RowKey of(RowKey rowKey) {
+            RowKey clone = new RowKey();
+            clone.setTopic(rowKey.getTopic());
+            clone.setTime(rowKey.getTime());
+            clone.setBusinessId(rowKey.getBusinessId());
+            clone.setMessageId(rowKey.getMessageId());
+            return clone;
+        }
 
         public String getTopic() {
             return topic;
