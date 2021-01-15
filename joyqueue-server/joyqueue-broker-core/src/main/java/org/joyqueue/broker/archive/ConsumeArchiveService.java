@@ -116,11 +116,11 @@ public class ConsumeArchiveService extends Service {
                 .name("ReadAndPutHBase-ConsumeLog-Thread")
                 .daemon(true)
                 .onException(e -> {
-                    logger.error("ReadAndPutHBase-readAndWrite error, happened consume log [{}], error position [{}], error length [{}], exception {}, {}",
-                            repository.rFile.getName(), repository.rMap, readByteCounter.get(), e.getMessage(), e);
+                    logger.error("ReadAndPutHBase-readAndWrite error, happened consume log [{}], error position [{}], error length [{}], rollback position [{}], exception {}, {}",
+                            repository.rFile.getName(), repository.rMap, readByteCounter.get(), repository.rMap.position() - readByteCounter.get(), e.getMessage(), e);
                     repository.rollBack(readByteCounter.get());
-                    logger.info("Consume-archive: finish rollback consume log [{}], rollback position [{}], rollback length [{}].",
-                            repository.rFile.getName(), repository.rMap, readByteCounter.get());
+                    /*logger.info("Consume-archive: finish rollback consume log [{}], rollback position [{}], rollback length [{}].",
+                            repository.rFile.getName(), repository.rMap, readByteCounter.get());*/
                     readByteCounter.set(0);
                 })
                 .doWork(this::readAndWrite)

@@ -53,6 +53,7 @@ public class HBaseStore implements ArchiveStore {
 
     private String consumeLogTable = "consume_log";
     private String sendLogTable = "send_log";
+    private String sendLogBizTable = "send_log_biz";
     private String positionTable = "archive_position";
     private byte[] cf = "cf".getBytes(Charset.forName("utf-8"));
     private byte[] col = "col".getBytes(Charset.forName("utf-8"));
@@ -136,14 +137,16 @@ public class HBaseStore implements ArchiveStore {
         TraceStat stat = tracer.begin("org.joyqueue.server.archive.store.HBaseStore.putSendLog");
         try {
             List<Pair<byte[], byte[]>> logList = new LinkedList<>();
+            List<Pair<byte[], byte[]>> logBizList = new LinkedList<>();
             for (SendLog log : sendLogList) {
                 Pair<Pair<byte[], byte[]>, Pair<byte[], byte[]>> kvBytes = ArchiveSerializer.ProduceArchiveSerializer.convertSendLogToKVBytes(log);
                 // triple: sendlogkey, sendlogvalue, sendlog4bizIdkey
                 logList.add(new Pair<>(kvBytes.getKey().getKey(), kvBytes.getKey().getValue()));
-                logList.add(new Pair<>(kvBytes.getValue().getKey(), kvBytes.getValue().getValue()));
+                logBizList.add(new Pair<>(kvBytes.getValue().getKey(), kvBytes.getValue().getValue()));
             }
             // 写HBASE
             hBaseClient.put(namespace, sendLogTable, cf, col, logList);
+            hBaseClient.put(namespace, sendLogBizTable, cf, col, logBizList);
             tracer.end(stat);
         } catch (Exception e) {
             tracer.error(stat);
@@ -285,7 +288,12 @@ public class HBaseStore implements ArchiveStore {
         QueryCondition queryCondition = query.getQueryCondition();
 
         HBaseClient.ScanParameters scanParameters = new HBaseClient.ScanParameters();
-        scanParameters.setTableName(sendLogTable);
+        String businessId = queryCondition.getStartRowKey().getBusinessId();
+        if (StringUtils.isNotEmpty(businessId)) {
+            scanParameters.setTableName(sendLogBizTable);
+        } else {
+            scanParameters.setTableName(sendLogTable);
+        }
         scanParameters.setCf(cf);
         scanParameters.setCol(col);
         scanParameters.setRowCount(queryCondition.getCount());

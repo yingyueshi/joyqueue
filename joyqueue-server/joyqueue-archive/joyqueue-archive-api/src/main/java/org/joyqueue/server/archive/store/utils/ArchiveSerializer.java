@@ -2,7 +2,6 @@ package org.joyqueue.server.archive.store.utils;
 
 import com.google.common.hash.Hashing;
 import org.apache.commons.lang3.StringUtils;
-import org.joyqueue.exception.JoyQueueException;
 import org.joyqueue.server.archive.store.model.ConsumeLog;
 import org.joyqueue.server.archive.store.model.SendLog;
 import org.joyqueue.server.archive.store.query.QueryCondition;
@@ -179,6 +178,10 @@ public class ArchiveSerializer {
         return result;
     }
 
+    public static int byteArrayToInt(byte[] array) {
+        return array[0] & 255 | (array[1] & 255) << 8 | (array[2] & 255) << 16 | (array[3] & 255) << 24;
+    }
+
     public static byte intToByte(int i) {
         byte[] result = new byte[1];
         result[0] = (byte)(i & 0xFF);
@@ -202,47 +205,61 @@ public class ArchiveSerializer {
         return Hashing.murmur3_32().hashString(seed, Charset.forName("utf-8")).hashCode();
     }
 
+    public static byte[] xorOperation(byte[] source1, byte[] source2) {
+        if (source1.length != source2.length) {
+            return null;
+        }
+        byte[] xorResult = new byte[source1.length];
+        for (int i = 0; i < source1.length; i++) {
+            xorResult[i] = (byte) (source1[i] ^ source2[i]);
+        }
+        return xorResult;
+    }
+
     public static class ProduceArchiveSerializer {
         public static final int MAGIC_SALT = 256;
         public static final int MAGIC_SALT_START = 0;
         public static final int MAGIC_SALT_STOP = 255;
 
         /**
-         * key: salt(1) + topic(16) + sendTime(8) + businessId(16) + messageId(16) 总长度：57
-         * key: topic(16) + businessId(16) + sendTime(8) + messageId(16) 总长度：56
+         * randomkey:   salt(1) + topic(16) + sendTime(8) + businessId(16) + messageId(16) 总长度：57
+         * businesskey: (topic xor businessId)(16) + businessId(16) + sendTime(8) + messageId(16) 总长度：56
          * value: brokerId(4) + topic(变长) + app(变长) + clientIp(16) + compassType(2) + messageBody(变长) + businessId(变长)
          *
          * @param sendLog
          * @return
          */
         public static Pair<Pair<byte[], byte[]>, Pair<byte[], byte[]>> convertSendLogToKVBytes(SendLog sendLog) throws GeneralSecurityException {
-            byte[] messageIdBytes = md5(sendLog.getMessageId(),null);
+            final byte[] messageIdBytes = md5(sendLog.getMessageId(),null);
 
             //key: salt(1) + topic(16) + sendTime(8) + businessId(16) + messageId(16) 总长度：57
             ByteBuffer bufferKey = ByteBuffer.allocate(57);
 
-            String key = sendLog.getTopic() + sendLog.getSendTime() + sendLog.getBusinessId() + byteArrayToHexStr(messageIdBytes);
-            int hashcode = generateMurmurHash(key);
-            byte salt = intToByte(Math.abs(hashcode) % MAGIC_SALT);
+            final String key = sendLog.getTopic() + sendLog.getSendTime() + sendLog.getBusinessId() + byteArrayToHexStr(messageIdBytes);
+            final int hashcode = generateMurmurHash(key);
+            final byte salt = intToByte(Math.abs(hashcode) % MAGIC_SALT);
             bufferKey.put(salt);
             bufferKey.put(md5(sendLog.getTopic(), null));
             bufferKey.putLong(sendLog.getSendTime());
             bufferKey.put(md5(sendLog.getBusinessId(), null));
             bufferKey.put(messageIdBytes);
 
-            // key: topicId(16) + businessId(16) + sendTime(8) + messageId(16) 总长度：56
+            // key: (topic xor businessId)(16) + businessId(16) + sendTime(8) + messageId(16) 总长度：56
             ByteBuffer bizIdKey = ByteBuffer.allocate(56);
-            bizIdKey.put(md5(sendLog.getTopic(), null));
-            bizIdKey.put(md5(sendLog.getBusinessId(), null));
+            final byte[] topicMd5 = md5(sendLog.getTopic(), null);
+            final byte[] businessMd5 = md5(sendLog.getBusinessId(), null);
+            final byte[] xorMd5 = xorOperation(topicMd5, businessMd5);
+            bizIdKey.put(xorMd5);
+            bizIdKey.put(businessMd5);
             bizIdKey.putLong(sendLog.getSendTime());
             bizIdKey.put(messageIdBytes);
 
             // value
-            byte[] topic = sendLog.getTopic().getBytes(Charset.forName("utf-8"));
-            byte[] app = sendLog.getApp().getBytes(Charset.forName("utf-8"));
-            byte[] messageBody = sendLog.getMessageBody();
-            byte[] businessIdBytes = sendLog.getBusinessId().getBytes(Charset.forName("utf-8"));
-            int size = 4 + (4 + topic.length) + (4 + app.length) + 16 + 2 + (4 + messageBody.length) + (4 + businessIdBytes.length);
+            final byte[] topic = sendLog.getTopic().getBytes(Charset.forName("utf-8"));
+            final byte[] app = sendLog.getApp().getBytes(Charset.forName("utf-8"));
+            final byte[] messageBody = sendLog.getMessageBody();
+            final byte[] businessIdBytes = sendLog.getBusinessId().getBytes(Charset.forName("utf-8"));
+            final int size = 4 + (4 + topic.length) + (4 + app.length) + 16 + 2 + (4 + messageBody.length) + (4 + businessIdBytes.length);
             ByteBuffer bufferVal = ByteBuffer.allocate(size);
             bufferVal.putInt(sendLog.getBrokerId());
 
@@ -269,6 +286,9 @@ public class ArchiveSerializer {
         }
 
         public static SendLog readSendLog(Pair<byte[], byte[]> pair) {
+            if (pair == null) {
+                return new SendLog();
+            }
             SendLog log = new SendLog();
 
             byte[] key = pair.getKey();
@@ -328,8 +348,8 @@ public class ArchiveSerializer {
         public static byte[] convert4BizIdKey(Pair<byte[], byte[]> pair) {
             byte[] key = pair.getKey();
             ByteBuffer wrapKey = ByteBuffer.wrap(key);
-            byte[] topicMD5 = new byte[16];
-            wrapKey.get(topicMD5);
+            byte[] xorMd5 = new byte[16];
+            wrapKey.get(xorMd5);
             byte[] businessId = new byte[16];
             wrapKey.get(businessId);
             long time = wrapKey.getLong();
@@ -343,7 +363,7 @@ public class ArchiveSerializer {
             // 1 + 16 + 8 + 16 + 16 = 57
             ByteBuffer allocate = ByteBuffer.allocate(57);
             allocate.put(salt);
-            allocate.put(topicMD5);
+            allocate.put(xorOperation(xorMd5, businessId));
             allocate.putLong(time);
             allocate.put(businessId);
             allocate.put(messageId);
@@ -351,7 +371,7 @@ public class ArchiveSerializer {
             return allocate.array();
         }
 
-        public static byte[] createRowKey(int salt, QueryCondition.RowKey rowKey) throws GeneralSecurityException, JoyQueueException {
+        public static byte[] createRowKey(int salt, QueryCondition.RowKey rowKey) throws GeneralSecurityException {
             String topic = rowKey.getTopic();
             long crateTime = rowKey.getTime();
             String businessId = rowKey.getBusinessId();
@@ -363,8 +383,10 @@ public class ArchiveSerializer {
                 // 16 + 16 + 8 + 16 = 56
                 allocate = ByteBuffer.allocate(56);
 
-                allocate.put(md5(topic, null));
-                allocate.put(md5(businessId, null));
+                final byte[] topicMd5 = md5(topic, null);
+                final byte[] businessMd5 = md5(businessId, null);
+                allocate.put(xorOperation(topicMd5, businessMd5));
+                allocate.put(businessMd5);
                 allocate.putLong(crateTime);
                 if (messageId != null) {
                     allocate.put(new BigInteger(messageId, 16).toByteArray());
