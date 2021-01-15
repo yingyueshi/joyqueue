@@ -115,15 +115,18 @@ public class ReplicationManager extends Service {
                         replicaGroupCount++;
                         if (replicaGroup.isLeader()) {
                             replicaLeaderCount++;
-                            logger.info("Partition group {} flush error times is {}",
-                                    entry.getKey(), replicaGroup.getStoreFlushErrorTimes());
+                            logger.info("Partition group {} flush error times is {}, session count is {}, " +
+                                    "response queue size is {}",
+                                    entry.getKey(), replicaGroup.getStoreFlushErrorTimes(),
+                                    replicaGroup.getSessionCount(), replicaGroup.getResponseQueueSize());
                             if (replicaGroup.getStoreFlushErrorTimes() > 0) {
                                 logger.info("Partition group {} have flush error times is {}",
                                         entry.getKey(), replicaGroup.getStoreFlushErrorTimes());
                             }
                         }
                     }
-                    logger.info("ReplicationManager, managed replica group count {} ,leader count {} , replicate queue capacity is {}, current size is {}",
+                    logger.info("ReplicationManager, managed replica group count {} ,leader count {} , " +
+                            "replicate queue capacity is {}, current size is {}",
                             replicaGroupCount, replicaLeaderCount, electionConfig.getCommandQueueSize(), replicateQueue.size());
                 } catch (Throwable th) {
                     logger.warn("ReplicateManger schedule error.", th);
