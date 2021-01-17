@@ -33,7 +33,7 @@ public class QueryCondition implements Query {
     private RowKey startRowKey; // 查询开始键
     private RowKey stopRowKey; // 查询结束键
     private int count;
-    private int queryCounter = 0;
+    private int queryBucket = 0;
 
     private RowKey rowKey; // 指定RowKey查询
 
@@ -80,12 +80,12 @@ public class QueryCondition implements Query {
         this.startRowKeyByteArr = bytes;
     }
 
-    public int getQueryCounter() {
-        return queryCounter;
+    public int getQueryBucket() {
+        return queryBucket;
     }
 
-    public void setQueryCounter(int queryCounter) {
-        this.queryCounter = queryCounter;
+    public void setQueryBucket(int queryBucket) {
+        this.queryBucket = queryBucket;
     }
 
     @Override
@@ -94,7 +94,7 @@ public class QueryCondition implements Query {
                 "startRowKey=" + startRowKey +
                 ", stopRowKey=" + stopRowKey +
                 ", count=" + count +
-                ", queryCounter=" + queryCounter +
+                ", queryBucket=" + queryBucket +
                 ", rowKey=" + rowKey +
                 ", startRowKeyByteArr=" + Arrays.toString(startRowKeyByteArr) +
                 '}';

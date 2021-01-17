@@ -430,6 +430,7 @@ public class ProduceArchiveService extends Service {
                             }
                             // 写入计数（用于归档位置）
                             writeCounter(sendLogs);
+                            break;
                         } catch (JoyQueueException e) {
                             logger.error("Produce-archive: write sendLogs error: {}", e);
                             if (--count == 0) {
