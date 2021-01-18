@@ -112,7 +112,7 @@ public class ArchiveServiceImpl implements ArchiveService {
         QueryCondition.RowKey startRow = new QueryCondition.RowKey();
         startRow.setBusinessId(businessId);
         startRow.setMessageId(messageId);
-        startRow.setTime(time);
+        startRow.setSendTime(time);
         startRow.setTopic(topic);
         queryCondition.setRowKey(startRow);
         SendLog sendLog = archiveStore.getOneSendLog(queryCondition);
@@ -162,10 +162,13 @@ public class ArchiveServiceImpl implements ArchiveService {
             startRow.setMessageId(qArchive.getMessageId());
         }
         if (qArchive.getBeginTime() != null) {
-            startRow.setTime(qArchive.getBeginTime().getTime());
+            startRow.setBeginTime(qArchive.getBeginTime().getTime());
+        }
+        if (qArchive.getEndTime() != null) {
+            startRow.setEndTime(qArchive.getEndTime().getTime());
         }
         if (qArchive.getSendTime() != null) {
-            startRow.setTime(qArchive.getSendTime().getTime());
+            startRow.setSendTime(qArchive.getSendTime().getTime());
         }
         if (NullUtil.isNotBlank(qArchive.getRowKeyStart())) {
             queryCondition.setStartRowKeyByteArr(qArchive.getRowKeyStart());
@@ -182,8 +185,14 @@ public class ArchiveServiceImpl implements ArchiveService {
         if (NullUtil.isNotBlank(qArchive.getMessageId())) {
             endRow.setMessageId(qArchive.getMessageId());
         }
+        if (qArchive.getBeginTime() != null) {
+            endRow.setBeginTime(qArchive.getBeginTime().getTime());
+        }
         if (qArchive.getEndTime() != null) {
-            endRow.setTime(qArchive.getEndTime().getTime());
+            endRow.setEndTime(qArchive.getEndTime().getTime());
+        }
+        if (qArchive.getSendTime() != null) {
+            endRow.setSendTime(qArchive.getSendTime().getTime());
         }
         queryCondition.setStopRowKey(endRow);
         //设置数量
