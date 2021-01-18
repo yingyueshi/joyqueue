@@ -105,14 +105,18 @@ public class QueryCondition implements Query {
      */
     public static class RowKey {
         private String topic;
-        private long time;
+        private long beginTime;
+        private long endTime;
+        private long sendTime;
         private String businessId;
         private String messageId;
 
         public static RowKey of(RowKey rowKey) {
             RowKey clone = new RowKey();
             clone.setTopic(rowKey.getTopic());
-            clone.setTime(rowKey.getTime());
+            clone.setBeginTime(rowKey.getBeginTime());
+            clone.setEndTime(rowKey.getEndTime());
+            clone.setSendTime(rowKey.getSendTime());
             clone.setBusinessId(rowKey.getBusinessId());
             clone.setMessageId(rowKey.getMessageId());
             return clone;
@@ -126,12 +130,28 @@ public class QueryCondition implements Query {
             this.topic = topic;
         }
 
-        public long getTime() {
-            return time;
+        public long getBeginTime() {
+            return beginTime;
         }
 
-        public void setTime(long time) {
-            this.time = time;
+        public void setBeginTime(long beginTime) {
+            this.beginTime = beginTime;
+        }
+
+        public long getEndTime() {
+            return endTime;
+        }
+
+        public void setEndTime(long endTime) {
+            this.endTime = endTime;
+        }
+
+        public long getSendTime() {
+            return sendTime;
+        }
+
+        public void setSendTime(long sendTime) {
+            this.sendTime = sendTime;
         }
 
         public String getBusinessId() {
@@ -154,7 +174,9 @@ public class QueryCondition implements Query {
         public String toString() {
             return "RowKey{" +
                     "topic='" + topic + '\'' +
-                    ", time=" + time +
+                    ", beginTime=" + beginTime +
+                    ", endTime=" + endTime +
+                    ", sendTime=" + sendTime +
                     ", businessId='" + businessId + '\'' +
                     ", messageId='" + messageId + '\'' +
                     '}';
