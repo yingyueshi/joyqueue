@@ -517,20 +517,27 @@ public class ProduceArchiveService extends Service {
             String[] split = key.split(separator);
             String topic = split[0];
             short partition = Short.parseShort(split[1]);
-            AtomicInteger counter = storeCounter.get(key);
-            int num;
-            while (!counter.compareAndSet(num = counter.get(), 0)) {
-            }
-            try {
-                // 从存储中读取消息
-                Long position = archiveStore.getPosition(topic, partition);
-                position = position == null ? 0 : position;
-                // 将新的位置写入存储
-                archiveStore.putPosition(new AchivePosition(topic, partition, position + num));
-            } catch (Throwable th) {
-                // 回滚
-                int rollbackNum;
-                while (!counter.compareAndSet(rollbackNum = counter.get(), rollbackNum + num)) {
+            // 关闭归档或者raft切换后 计数器也需要同步
+            if (!itemList.cpList.contains(new SendArchiveItem(topic, partition)) ||
+                    !clusterManager.checkArchiveable(TopicName.parse(topic))) {
+                logger.info("Produce-archive: sync archive position [{}] is closed on clean.", key);
+                iterator.remove();
+            } else {
+                AtomicInteger counter = storeCounter.get(key);
+                int num;
+                while (!counter.compareAndSet(num = counter.get(), 0)) {
+                }
+                try {
+                    // 从存储中读取消息
+                    Long position = archiveStore.getPosition(topic, partition);
+                    position = position == null ? 0 : position;
+                    // 将新的位置写入存储
+                    archiveStore.putPosition(new AchivePosition(topic, partition, position + num));
+                } catch (Throwable th) {
+                    // 回滚
+                    int rollbackNum;
+                    while (!counter.compareAndSet(rollbackNum = counter.get(), rollbackNum + num)) {
+                    }
                 }
             }
         }
@@ -693,6 +700,10 @@ public class ProduceArchiveService extends Service {
          */
         public List<SendArchiveItem> getAll() {
             return cpList;
+        }
+
+        public boolean contains(SendArchiveItem item) {
+            return cpList.contains(item);
         }
 
         /**
