@@ -58,6 +58,7 @@ public class BrokerStoreConfig {
         STORE_PHYSICAL_CLEAN_SCHEDULE_END("store.physical.clean.schedule.end",DEFAULT_STORE_PHYSICAL_CLEAN_SCHEDULE_END,Type.INT),
         STORE_PHYSICAL_CLEAN_INTERVAL("store.physical.clean.interval",DEFAULT_STORE_PHYSICAL_CLEAN_INTERVAL,Type.INT),
         STORE_DELETE_RETAIN_INTERVAL("store.delete.retain.interval",DEFAULT_STORE_DELETE_RETAIN_INTERVAL,Type.LONG),
+        STORE_CLEAN_TRACE_LOG("store.clean.trace.log.", false, Type.BOOLEAN),
 
         ;
         private String name;
@@ -182,6 +183,13 @@ public class BrokerStoreConfig {
     }
     public int getStoreDeleteRetainInterval() {
         return PropertySupplier.getValue(propertySupplier, BrokerStoreConfigKey.STORE_DELETE_RETAIN_INTERVAL, DEFAULT_STORE_DELETE_RETAIN_INTERVAL);
+    }
+
+    public boolean getLogDetail(String brokerId) {
+        return PropertySupplier.getValue(propertySupplier,
+                BrokerStoreConfigKey.STORE_CLEAN_TRACE_LOG + brokerId,
+                BrokerStoreConfigKey.STORE_CLEAN_TRACE_LOG.getType(),
+                BrokerStoreConfigKey.STORE_CLEAN_TRACE_LOG.getValue());
     }
 }
 

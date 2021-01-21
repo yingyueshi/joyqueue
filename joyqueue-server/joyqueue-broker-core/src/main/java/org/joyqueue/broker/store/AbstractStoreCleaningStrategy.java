@@ -1,5 +1,6 @@
 package org.joyqueue.broker.store;
 
+import org.joyqueue.broker.cluster.ClusterManager;
 import org.joyqueue.broker.config.BrokerStoreConfig;
 import org.joyqueue.domain.TopicConfig;
 import org.joyqueue.toolkit.config.PropertySupplier;
@@ -9,9 +10,10 @@ import org.joyqueue.toolkit.config.PropertySupplier;
  * Base store clean strategy with dynamic config
  *
  **/
-public abstract class AbstractStoreCleaningStrategy implements StoreCleaningStrategy,DynamicStoreConfig {
+public abstract class AbstractStoreCleaningStrategy implements StoreCleaningStrategy {
 
-    private BrokerStoreConfig brokerStoreConfig;
+    protected ClusterManager clusterManager;
+    protected BrokerStoreConfig brokerStoreConfig;
     @Override
     public long storeLogMaxTime(TopicConfig topicConfig) {
         if (topicConfig != null) {
@@ -34,6 +36,11 @@ public abstract class AbstractStoreCleaningStrategy implements StoreCleaningStra
             }
         }
         return brokerStoreConfig.keepUnconsumed();
+    }
+
+    @Override
+    public void setClusterManager(ClusterManager clusterManager) {
+        this.clusterManager = clusterManager;
     }
 
     @Override

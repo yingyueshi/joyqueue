@@ -82,6 +82,7 @@ public class StoreCleanManager extends Service {
         Preconditions.checkArgument(storeCleaningStrategies.size() != 0, "load cleaning strategy list can not be null");
         cleaningStrategyMap = new HashMap<>(storeCleaningStrategies.size());
         for (StoreCleaningStrategy cleaningStrategy : storeCleaningStrategies) {
+            cleaningStrategy.setClusterManager(clusterManager);
             cleaningStrategy.setSupplier(propertySupplier);
             cleaningStrategyMap.put(cleaningStrategy.getClass().getSimpleName(), cleaningStrategy);
         }
@@ -164,14 +165,23 @@ public class StoreCleanManager extends Service {
             roundDeleteStoreSize=0;
             List<TopicConfig> topicConfigs = clusterManager.getTopics();
             if (topicConfigs != null && topicConfigs.size() > 0) {
+                if (brokerStoreConfig.getLogDetail(clusterManager.getBrokerId().toString())) {
+                    LOG.info("StoreClean: get nsr TopicConfigs: {}", topicConfigs);
+                }
                 for (TopicConfig topicConfig : topicConfigs) {
                     List<PartitionGroup> partitionGroups = clusterManager.getTopicPartitionGroups(topicConfig.getName());
                     if (CollectionUtils.isNotEmpty(partitionGroups)) {
+                        if (brokerStoreConfig.getLogDetail(clusterManager.getBrokerId().toString())) {
+                            LOG.info("StoreClean: get nsr PartitionGroups by TopicConfig: {}", partitionGroups);
+                        }
                         for (PartitionGroup partitionGroup : partitionGroups) {
                             try {
                                 Set<Short> partitions = partitionGroup.getPartitions();
                                 if (CollectionUtils.isNotEmpty(partitions)) {
                                     List<String> appList = clusterManager.getConsumersByTopic(topicConfig.getName());
+                                    if (brokerStoreConfig.getLogDetail(clusterManager.getBrokerId().toString())) {
+                                        LOG.info("StoreClean: get nsr Consumers by TopicName: {}", appList);
+                                    }
                                     Map<Short, Long> partitionAckMap = new HashMap<>(partitions.size());
                                     for (Short partition : partitions) {
                                         long minAckIndex = Long.MAX_VALUE;
@@ -181,6 +191,9 @@ public class StoreCleanManager extends Service {
                                             }
                                         }
                                         partitionAckMap.put(partition, minAckIndex);
+                                    }
+                                    if (brokerStoreConfig.getLogDetail(clusterManager.getBrokerId().toString())) {
+                                        LOG.info("StoreClean: calc min partitions ack index: {}", partitionAckMap);
                                     }
                                     StoreCleaningStrategy cleaningStrategy = cleaningStrategyMap.get(brokerStoreConfig.getCleanStrategyClass());
                                     if (cleaningStrategy != null) {
