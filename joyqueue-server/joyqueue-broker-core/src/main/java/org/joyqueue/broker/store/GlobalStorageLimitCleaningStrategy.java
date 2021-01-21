@@ -37,7 +37,13 @@ public class GlobalStorageLimitCleaningStrategy extends  AbstractStoreCleaningSt
         long now = SystemClock.now();
         long used=0L;
         long maxStoreTime= storeLogMaxTime(topicConfig);
+        if (brokerStoreConfig.getLogDetail(clusterManager.getBrokerId().toString())) {
+            LOG.info("StoreClean: get nsr MaxStoreTime: {}", maxStoreTime);
+        }
         boolean keepUnconsumed=keepUnconsumed(topicConfig);
+        if (brokerStoreConfig.getLogDetail(clusterManager.getBrokerId().toString())) {
+            LOG.info("StoreClean: get nsr KeepUnconsumed: {}", keepUnconsumed);
+        }
         if(LOG.isDebugEnabled()){
             LOG.info("topic {},Dynamic max store time {} ms,keep unconsumed {}",partitionGroupStore.getTopic(),maxStoreTime,keepUnconsumed);
         }
@@ -48,11 +54,20 @@ public class GlobalStorageLimitCleaningStrategy extends  AbstractStoreCleaningSt
             deletedSize = partitionGroupStore.clean(cleanWALBeforeTime, partitionAckMap, keepUnconsumed);
             totalDeletedSize += deletedSize;
         } while (deletedSize > 0L);
+
+        if (brokerStoreConfig.getLogDetail(clusterManager.getBrokerId().toString())) {
+            LOG.info("StoreClean: clean (now - maxStoreTime): {}, totalDeletedSize: {}", cleanWALBeforeTime, totalDeletedSize);
+        }
+
         String partitionGroupKey= String.format("%s:%d",partitionGroupStore.getTopic(),partitionGroupStore.getPartitionGroup());
         // first, clean out of date message log for all partition groups and we may force clean consumed log
         Boolean force=partitionGroupForcibleCleanWal.get(partitionGroupKey);
         if(force==null){ partitionGroupForcibleCleanWal.put(partitionGroupKey,true);
                          force=false;}
+
+        if (brokerStoreConfig.getLogDetail(clusterManager.getBrokerId().toString())) {
+            LOG.info("StoreClean: partition group {}, force clean {}, storage state: {}", partitionGroupKey, force, storageState.toString());
+        }
 
         if(force&&storageState==StorageState.CLEANING){
             if((used=usedStorageSize())>stopCleanWALStorageSizeThreshold) {

@@ -1,5 +1,6 @@
 package org.joyqueue.broker.store;
 
+import org.joyqueue.broker.cluster.ClusterManager;
 import org.joyqueue.domain.TopicConfig;
 
 /**
@@ -18,4 +19,6 @@ public interface DynamicStoreConfig {
      * @return true if keep unconsumed log
      **/
     boolean keepUnconsumed(TopicConfig topicConfig);
+
+    void setClusterManager(ClusterManager clusterManager);
 }

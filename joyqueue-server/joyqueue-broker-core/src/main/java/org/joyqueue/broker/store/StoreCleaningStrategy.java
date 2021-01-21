@@ -25,7 +25,7 @@ import java.util.Map;
 /**
  * @author majun8
  */
-public interface StoreCleaningStrategy extends PropertySupplierAware {
+public interface StoreCleaningStrategy extends PropertySupplierAware, DynamicStoreConfig {
 
     long deleteIfNeeded(PartitionGroupStore partitionGroupStore, Map<Short, Long> partitionAckMap, TopicConfig topicConfig) throws IOException;
 }
