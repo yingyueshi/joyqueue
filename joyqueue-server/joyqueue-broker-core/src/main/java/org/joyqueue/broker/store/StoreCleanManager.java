@@ -133,23 +133,38 @@ public class StoreCleanManager extends Service {
     }
 
     private void physicalClean() {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Start scheduled StoreCleaningStrategy.physicalClean {} ",storeService.getRemovedPartitionGroups().size());
+        }
         long now = SystemClock.now();
         for (RemovedPartitionGroupStore removedPartitionGroup : storeService.getRemovedPartitionGroups()) {
-            if(now-removedPartitionGroup.deleteTime()<=brokerStoreConfig.getStoreDeleteRetainInterval()){
-                continue;
-            }
-            boolean interrupted = false;
-            while (removedPartitionGroup.physicalDeleteLeftFile()) {
-                try {
-                    Thread.currentThread().sleep(brokerStoreConfig.getStorePhysicalCleanInterval());
-                } catch (InterruptedException e) {
-                    interrupted = true;
-                    break;
+            try {
+                long deleteTime = removedPartitionGroup.deleteTime();
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("begin to delete topic {} partitionGroup {} deleteTime {} now {}", removedPartitionGroup.getTopic(), removedPartitionGroup.getPartitionGroup(),deleteTime,now);
                 }
-            }
-            if (!interrupted) {
-                LOG.info("Store file deleted, topic: {}, partitionGroup: {}", removedPartitionGroup.getTopic(), removedPartitionGroup.getPartitionGroup());
-                storeService.physicalDeleteRemovedPartitionGroup(removedPartitionGroup.getTopic(), removedPartitionGroup.getPartitionGroup());
+                if (now - deleteTime <= brokerStoreConfig.getStoreDeleteRetainInterval()) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.info("No time to delete topic {} partitionGroup {}  ", removedPartitionGroup.getTopic(), removedPartitionGroup.getPartitionGroup());
+                    }
+                    continue;
+                }
+                boolean interrupted = false;
+                while (removedPartitionGroup.physicalDeleteLeftFile()) {
+                    try {
+                        LOG.info("delete topic {} partitionGroup {} success ", removedPartitionGroup.getTopic(), removedPartitionGroup.getPartitionGroup());
+                        Thread.currentThread().sleep(brokerStoreConfig.getStorePhysicalCleanInterval());
+                    } catch (InterruptedException e) {
+                        interrupted = true;
+                        break;
+                    }
+                }
+                if (!interrupted) {
+                    LOG.info("Store file deleted, topic: {}, partitionGroup: {}", removedPartitionGroup.getTopic(), removedPartitionGroup.getPartitionGroup());
+                    storeService.physicalDeleteRemovedPartitionGroup(removedPartitionGroup.getTopic(), removedPartitionGroup.getPartitionGroup());
+                }
+            }catch (Exception e){
+                LOG.error("StoreCleaningStrategy.physicalClean topic {} partitionGroup {} error {}",removedPartitionGroup.getTopic(), removedPartitionGroup.getPartitionGroup(),e);
             }
         }
     }

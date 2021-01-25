@@ -181,7 +181,7 @@ public class BrokerStoreConfig {
     public int getStorePhysicalCleanInterval() {
         return PropertySupplier.getValue(propertySupplier, BrokerStoreConfigKey.STORE_PHYSICAL_CLEAN_INTERVAL, DEFAULT_STORE_PHYSICAL_CLEAN_INTERVAL);
     }
-    public int getStoreDeleteRetainInterval() {
+    public long getStoreDeleteRetainInterval() {
         return PropertySupplier.getValue(propertySupplier, BrokerStoreConfigKey.STORE_DELETE_RETAIN_INTERVAL, DEFAULT_STORE_DELETE_RETAIN_INTERVAL);
     }
 
