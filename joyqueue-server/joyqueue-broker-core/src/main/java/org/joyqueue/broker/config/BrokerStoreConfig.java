@@ -187,7 +187,7 @@ public class BrokerStoreConfig {
 
     public boolean getLogDetail(String brokerId) {
         return PropertySupplier.getValue(propertySupplier,
-                BrokerStoreConfigKey.STORE_CLEAN_TRACE_LOG + brokerId,
+                BrokerStoreConfigKey.STORE_CLEAN_TRACE_LOG.getName() + brokerId,
                 BrokerStoreConfigKey.STORE_CLEAN_TRACE_LOG.getType(),
                 BrokerStoreConfigKey.STORE_CLEAN_TRACE_LOG.getValue());
     }
