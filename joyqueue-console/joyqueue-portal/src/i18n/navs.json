@@ -106,6 +106,11 @@
           "path": "retry",
           "name": "retry",
           "component": "tool/retry.vue"
+        },
+        {
+          "path": "brokerMigration",
+          "name": "brokerMigration",
+          "component": "tool/brokerMigration.vue"
         }
       ]
     }
@@ -177,6 +182,11 @@
           "component": "setting/brokerMonitor.vue"
         },
         {
+          "path": "brokerMigration",
+          "name": "brokerMigration",
+          "component": "setting/brokerMigration.vue"
+        },
+        {
           "path": "metric",
           "name": "metric",
           "component": "setting/metric.vue"
@@ -217,6 +227,11 @@
           "path": "retry",
           "name": "retry",
           "component": "tool/retry.vue"
+        },
+        {
+          "path": "brokerMigration",
+          "name": "brokerMigration",
+          "component": "tool/brokerMigration.vue"
         }
       ]
     }

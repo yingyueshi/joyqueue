@@ -114,8 +114,8 @@ public class TopicPartitionGroupServiceImpl  implements TopicPartitionGroupServi
     }
 
     @Override
-    public List<TopicPartitionGroup> findByTopic(String namespace, String topic) {
-        return partitionGroupServerService.findByTopic(namespace, topic);
+    public List<TopicPartitionGroup> findByTopic(String topic, String namespace) {
+        return partitionGroupServerService.findByTopic(topic, namespace);
     }
 
     @Override

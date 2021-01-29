@@ -160,6 +160,69 @@ CREATE TABLE IF NOT EXISTS `topic_msg_filter` (
  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB CHARSET=utf8;
 
+CREATE TABLE IF NOT EXISTS `migration_task` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '自增id',
+  `src_broker_id` bigint(20) NOT NULL COMMENT '源Broker',
+  `src_broker_ip` varchar(20) NOT NULL COMMENT '源BrokerIP',
+  `remove_first` varchar(128) DEFAULT NULL COMMENT '是否先摘除，后',
+  `scope_type` varchar(128) DEFAULT  NULL COMMENT '迁移范围类型',
+  `scopes` varchar(2048) DEFAULT NULL COMMENT '迁移范围',
+  `update_by` bigint(20) DEFAULT '0' COMMENT '修改人',
+  `update_time` datetime NOT NULL COMMENT '记录更新时间',
+  `create_by` bigint(20) DEFAULT '0' COMMENT '创建人',
+  `create_time` datetime NOT NULL COMMENT '记录创建时间',
+  `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '状态：-1 删除，0 禁用，1 启用',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='Broker迁移表';
+
+CREATE TABLE IF NOT EXISTS `migration_target` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '自增id',
+  `migration_id` bigint(20) NOT NULL COMMENT 'Broker迁移任务id',
+  `broker_id` bigint(20) NOT NULL COMMENT '目标Broker',
+  `broker_ip` varchar(20) NOT NULL COMMENT '目标BrokerIP',
+  `weight` tinyint(2) DEFAULT 1 COMMENT '权重',
+  `update_by` bigint(20) DEFAULT '0' COMMENT '修改人',
+  `update_time` datetime NOT NULL COMMENT '记录更新时间',
+  `create_by` bigint(20) DEFAULT '0' COMMENT '创建人',
+  `create_time` datetime NOT NULL COMMENT '记录创建时间',
+  `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '状态：-1 删除，0 禁用，1 启用',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='Broker迁移目标表';
+
+CREATE TABLE IF NOT EXISTS `migration_subjob` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键自增id',
+  `migration_id` bigint(20) NOT NULL COMMENT 'Broker迁移任务id',
+  `topic_code` varchar(128) NOT NULL COMMENT '主题code',
+  `namespace_code` varchar(128) NOT NULL COMMENT '命名空间',
+  `pg_no` int(11) NOT NULL COMMENT '主题分区组号',
+  `src_broker_id` bigint(20) NOT NULL COMMENT '复制源头broker',
+  `tgt_broker_id` bigint(20) NOT NULL COMMENT '复制目标broker',
+  `executor` varchar(20) DEFAULT NULL COMMENT '任务执行分配器',
+  `status` TINYINT(4) DEFAULT NULL COMMENT '状态： 0 新建，1 已派发，2 执行中 3 执行成功 4 执行失败 6 重试',
+  `version` int(20) DEFAULT NULL COMMENT '更新版本号',
+  `create_by` BIGINT(20) DEFAULT NULL COMMENT '创建人',
+  `create_time` DATETIME DEFAULT NULL COMMENT '创建时间',
+  `update_by` BIGINT(20) DEFAULT NULL COMMENT '更新人',
+  `update_time` DATETIME DEFAULT NULL COMMENT '更新时间',
+  `exception` varchar(2048) DEFAULT NULL COMMENT '迁移错误日志',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB AUTO_INCREMENT = 1000 DEFAULT CHARSET = utf8 COMMENT = 'Broker迁移子任务';
+
+CREATE TABLE IF NOT EXISTS `migration_report` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '自增id',
+  `migration_id` bigint(20) NOT NULL COMMENT 'Broker迁移任务id',
+  `type` varchar(64) NOT NULL COMMENT '类型',
+  `topic_code` varchar(128) NOT NULL COMMENT '主题code',
+  `namespace_code` varchar(128) NOT NULL COMMENT '命名空间',
+  `pg_no` int(11) NOT NULL COMMENT '主题分区组号',
+  `create_by` BIGINT(20) DEFAULT NULL COMMENT '创建人',
+  `create_time` DATETIME DEFAULT NULL COMMENT '创建时间',
+  `update_by` BIGINT(20) DEFAULT NULL COMMENT '更新人',
+  `update_time` DATETIME DEFAULT NULL COMMENT '更新时间',
+  `status` TINYINT(4) DEFAULT NULL COMMENT '状态： 0 新建，1 已派发，2 执行中 3 执行成功 4 执行失败 6 重试',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='Broker评估报告表';
+
 -- init default admin USER
 MERGE INTO `user`
 (`id`, `code`, `name`, `org_id`, `org_name`, `email`, `mobile`, `role`, `sign`, `create_by`, `create_time`, `update_by`, `update_time`, `status`)

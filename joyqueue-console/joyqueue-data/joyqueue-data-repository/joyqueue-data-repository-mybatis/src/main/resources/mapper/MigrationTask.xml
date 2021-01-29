@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.joyqueue.repository.MigrationTaskRepository">
+
+	<resultMap id="baseResultMap" type="MigrationTask">
+		<result property="id" column="id" jdbcType="BIGINT"/>
+		<result property="srcBrokerId" column="src_broker_id" jdbcType="BIGINT"/>
+		<result property="removeFirst" column="remove_first" jdbcType="TINYINT"/>
+		<result property="scopeType" column="scope_type" jdbcType="VARCHAR"/>
+		<result property="scopes" column="scopes" jdbcType="VARCHAR"/>
+		<result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
+		<result property="createBy.id" column="create_by" jdbcType="BIGINT"/>
+		<result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
+		<result property="updateBy.id" column="update_by" jdbcType="BIGINT"/>
+		<result property="status" column="status" jdbcType="TINYINT"/>
+	</resultMap>
+
+    <insert id="add" useGeneratedKeys="true" keyProperty="id" parameterType="MigrationTask">
+       <![CDATA[
+          INSERT INTO migration_task(
+            src_broker_id,
+            remove_first,
+            scope_type,
+            scopes,
+            `create_time`,
+            create_by,
+            update_time,
+            update_by,
+            status
+            )
+          VALUES(
+            #{srcBrokerId},
+            #{removeFirst},
+            #{scopeType},
+            #{scopes},
+            #{createTime},
+            #{createBy.id},
+            #{updateTime},
+            #{updateBy.id},
+            #{status}
+            )
+       ]]>
+	</insert>
+    <update id="update" parameterType="MigrationTask">
+	 <![CDATA[
+        UPDATE
+            migration_task
+        SET
+           `src_broker_id` = #{srcBrokerId},
+           `remove_first` = #{removeFirst},
+           `scope_type` = #{scopeType},
+           `scopes` = #{scopes},
+           `update_by`=#{updateBy.id},
+           `update_time`=#{updateTime}
+        WHERE
+            id=#{id}
+        ]]>
+	</update>
+
+    <update id="delete" parameterType="MigrationTask">
+    <![CDATA[
+        UPDATE
+            migration_task
+        SET
+            update_by=#{updateBy.id},
+            update_time=#{updateTime},
+            status=-1
+        WHERE
+            id=#{id}
+        ]]>
+	</update>
+
+    <sql id="baseColumn">
+		SELECT
+			t.id,
+			t.src_broker_id,
+			t.remove_first,
+			t.scope_type,
+			t.scopes,
+			t.create_time,
+			t.create_by,
+			t.update_time,
+			t.update_by,
+			t.status,
+			(SELECT GROUP_CONCAT(CONVERT(m.broker_id,char)) FROM migration_target m WHERE m.migration_id = t.id) AS targetsStr
+		FROM migration_task AS t
+	</sql>
+
+    <select id="findById" parameterType="long" resultMap="baseResultMap">
+        <include refid="baseColumn"/>
+        WHERE t.id=#{id}
+    </select>
+
+	<select id="findUnfinishedBySrcBrokerId" parameterType="int" resultMap="baseResultMap">
+		<include refid="baseColumn"/>
+		WHERE t.src_broker_id=#{srcBrokerId}
+		AND t.status in (1,2)
+	</select>
+
+	<sql id="queryCondition">
+		<where>
+			t.`status` > 0
+			<if test="query != null">
+				<if test="query.status != null and query.status != 0">
+					and t.`status` = #{query.status}
+				</if>
+			</if>
+		</where>
+	</sql>
+	<select id="findByQuery" parameterType="qpagequery" resultMap="baseResultMap">
+		<include refid="baseColumn"/>
+		<include refid="queryCondition"/>
+		order by t.id desc
+	</select>
+	<select id="findCountByQuery" parameterType="qpagequery" resultType="int">
+		select count(1)
+		from migration_task t
+		<include refid="queryCondition"/>
+	</select>
+    <update id="state" parameterType="MigrationTask">
+        <![CDATA[
+        UPDATE
+            migration_task
+        SET
+           `status`=#{status},
+           `update_by`=#{updateBy.id},
+           `update_time`=#{updateTime}
+        WHERE
+            id=#{id}
+        ]]>
+    </update>
+</mapper>

@@ -78,7 +78,7 @@ public class TopicServiceImpl implements TopicService {
         Namespace namespace = topic.getNamespace();
         Topic oldTopic = findByCode(namespace == null?null:namespace.getCode(),topic.getCode());
         if (oldTopic != null) {
-            throw new DuplicateKeyException("topic aleady exist");
+            throw new DuplicateKeyException("topic already exist");
         }
 
         if (EnvironmentUtil.isTest()) {
@@ -302,6 +302,13 @@ public class TopicServiceImpl implements TopicService {
             topicCodes.add(tn);
         });
         return Lists.newArrayList(topicCodes);
+    }
+
+    @Override
+    public List<TopicName> findByBrokerAndKeyword(int brokerId, String keyword) throws Exception {
+        List<PartitionGroupReplica> replicas=replicaServerService.findPartitionGroupReplica(brokerId);
+        return replicas.stream().map(r -> TopicName.parse(r.getTopic().getCode(),r.getNamespace().getCode()))
+                .filter(r -> StringUtils.isEmpty(keyword) || r.getCode().contains(keyword.trim())).collect(Collectors.toList());
     }
 
     @Override

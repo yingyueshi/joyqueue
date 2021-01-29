@@ -12,7 +12,8 @@
       "retry": "重试查询",
       "archive": "归档查询",
       "operateHistory": "操作历史查询",
-      "msgFilter": "消息查询"
+      "msgFilter": "消息查询",
+      "brokerMigration": "Broker迁移"
     },
     "setting": {
       "dataCenter": "数据中心管理",
@@ -36,7 +37,8 @@
       "retry": "Retry Query",
       "archive": "Archive Query",
       "operateHistory": "Operate History",
-      "msgFilter": "Message Query"
+      "msgFilter": "Message Query",
+      "brokerMigration": "Broker Migration"
     },
     "setting": {
       "dataCenter": "Data Center Manage",

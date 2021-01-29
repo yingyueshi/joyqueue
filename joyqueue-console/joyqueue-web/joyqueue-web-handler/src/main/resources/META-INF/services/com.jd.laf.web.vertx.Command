@@ -23,3 +23,4 @@ org.joyqueue.handler.routing.command.chart.MetricCommand
 org.joyqueue.handler.routing.command.monitor.ConsumeOffsetCommand
 org.joyqueue.handler.routing.command.archive.ArchiveCommand
 org.joyqueue.handler.routing.command.topic.TopicMsgFilterCommand
+org.joyqueue.handler.routing.command.migration.MigrationTaskCommand

@@ -186,6 +186,9 @@
         <route inherit="post"
                path="/v1/topic/unsubscribed/search" handlers="topic#searchUnsubscribed render"
                errors="error"/>
+        <route inherit="post"
+               path="/v1/topic/findByBroker" handlers="topic#findByBroker render"
+               errors="error"/>
 
         <!--topic message filter-->
         <route inherit="post"
@@ -609,7 +612,16 @@
         <route inherit="get"
                path="/v1/grafana/getRedirectUrl/:uid" handlers="grafana#getRedirectUrl render"
                errors="error"/>
-
+        <!-- migration -->
+        <route inherit="post"
+               path="/v1/migration/analysis" handlers="migrationTask#analysis render"
+               errors="error"/>
+        <route inherit="post"
+               path="/v1/migration/add" handlers="migrationTask#add render"
+               errors="error"/>
+        <route inherit="post"
+               path="/v1/migration/search" handlers="migrationTask#search render"
+               errors="error"/>
 
     </routes>
 

@@ -81,6 +81,15 @@ public interface TopicService extends NsrService<Topic ,String> {
     List<TopicName> findTopic(String brokerId) throws Exception;
 
     /**
+     * 根据Broker和关键字查询topic
+     * @param brokerId
+     * @param keyword
+     * @return
+     * @throws Exception
+     */
+    List<TopicName> findByBrokerAndKeyword(int brokerId, String keyword) throws Exception;
+
+    /**
      * 根据opic查询producer，consumer所有相关app
      * @param namespace
      * @param topicCode

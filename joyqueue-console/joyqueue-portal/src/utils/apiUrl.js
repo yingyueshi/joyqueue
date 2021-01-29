@@ -82,6 +82,13 @@ export default {
   '/tool/operateHistory': {
     search: '/operLog/search'
   },
+  '/tool/brokerMigration': {
+    search: `/migration/search`,
+    searchBroker: '/broker/search',
+    searchTopic: '/topic/findByBroker',
+    analysis: '/migration/analysis',
+    add: '/migration/add'
+  },
   common: {
     findSubscribeGroup: `/consumer/findAllSubscribeGroups`,
     updateConsumer: `/consumer/update`,
