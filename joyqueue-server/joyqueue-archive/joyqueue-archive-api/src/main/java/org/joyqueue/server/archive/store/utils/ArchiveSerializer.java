@@ -219,9 +219,9 @@ public class ArchiveSerializer {
     }
 
     public static class ProduceArchiveSerializer {
-        public static final int MAGIC_SALT = 16;
+        public static final int MAGIC_SALT = 256;
         public static final int MAGIC_SALT_START = 0;
-        public static final int MAGIC_SALT_STOP = 15;
+        public static final int MAGIC_SALT_STOP = 255;
 
         public enum KeyType {
             START_ROWKEY,

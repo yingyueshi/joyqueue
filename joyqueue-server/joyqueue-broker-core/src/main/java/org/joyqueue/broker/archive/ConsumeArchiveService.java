@@ -274,9 +274,9 @@ public class ConsumeArchiveService extends Service {
             logger.warn("ConsumeArchiveService not be started.");
             return;
         }
-        TraceStat stat = tracer.begin("org.joyqueue.server.archive.consume.appendConsumeLog");
         if (locations != null && locations.length > 0) {
             if (checkRateLimitAvailable(connection, locations)) {
+                TraceStat stat = tracer.begin("org.joyqueue.server.archive.consume.appendConsumeLog");
                 List<ConsumeLog> logList = convert(connection, locations);
                 logList.forEach(log -> {
                     // 序列化
@@ -284,6 +284,7 @@ public class ConsumeArchiveService extends Service {
                     appendLog(buffer);
                     ArchiveSerializer.release(buffer);
                 });
+                tracer.end(stat);
             } else {
                 TraceStat limitBroker = tracer.begin("archive.consume.rate.limited");
                 TraceStat limitTopic = tracer.begin(String.format("archive.consume.rate.limited.%s.%s", locations[0].getTopic(), connection.getApp()));
@@ -294,7 +295,6 @@ public class ConsumeArchiveService extends Service {
                 tracer.end(limitTopic);
             }
         }
-        tracer.end(stat);
     }
 
     private boolean checkRateLimitAvailable(Connection connection, MessageLocation[] locations) {
