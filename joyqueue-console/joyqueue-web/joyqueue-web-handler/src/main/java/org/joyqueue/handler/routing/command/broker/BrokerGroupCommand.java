@@ -15,11 +15,15 @@
  */
 package org.joyqueue.handler.routing.command.broker;
 
+import com.jd.laf.web.vertx.annotation.Body;
+import com.jd.laf.web.vertx.annotation.Path;
+import com.jd.laf.web.vertx.annotation.QueryParam;
+import com.jd.laf.web.vertx.response.Response;
+import com.jd.laf.web.vertx.response.Responses;
 import org.apache.commons.collections.CollectionUtils;
 import org.joyqueue.exception.ValidationException;
 import org.joyqueue.handler.error.ErrorCode;
 import org.joyqueue.handler.routing.command.CommandSupport;
-import org.joyqueue.handler.Constants;
 import org.joyqueue.model.Pagination;
 import org.joyqueue.model.QPageQuery;
 import org.joyqueue.model.domain.Broker;
@@ -27,15 +31,11 @@ import org.joyqueue.model.domain.BrokerGroup;
 import org.joyqueue.model.domain.Identity;
 import org.joyqueue.model.query.QBrokerGroup;
 import org.joyqueue.service.BrokerGroupService;
-import com.jd.laf.web.vertx.annotation.Body;
-import com.jd.laf.web.vertx.annotation.Path;
-import com.jd.laf.web.vertx.annotation.QueryParam;
-import com.jd.laf.web.vertx.response.Response;
-import com.jd.laf.web.vertx.response.Responses;
 
 import java.util.List;
-
 import java.util.stream.Collectors;
+
+import static org.joyqueue.handler.Constants.ID;
 
 
 /**
@@ -52,7 +52,7 @@ public class BrokerGroupCommand extends CommandSupport<BrokerGroup, BrokerGroupS
     }
 
     @Path("updateBroker")
-    public Response updateBroker(@QueryParam(Constants.ID) String id, @Body Broker model) throws Exception {
+    public Response updateBroker(@QueryParam(ID) String id, @Body Broker model) throws Exception {
         try {
             service.updateBroker(model);
         } catch (ValidationException e) {

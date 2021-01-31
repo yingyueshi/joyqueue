@@ -15,10 +15,13 @@
  */
 package org.joyqueue.repository;
 
+import org.apache.ibatis.annotations.Param;
 import org.joyqueue.model.Uniqueable;
 import org.joyqueue.model.domain.ApplicationUser;
 import org.joyqueue.model.query.QApplicationUser;
 import org.springframework.stereotype.Repository;
+
+import java.util.List;
 
 /**
  * 应用-用户关联关系 仓库
@@ -28,4 +31,6 @@ import org.springframework.stereotype.Repository;
 public interface ApplicationUserRepository extends PageRepository<ApplicationUser, QApplicationUser>, Uniqueable<ApplicationUser> {
     ApplicationUser findByUserApp(ApplicationUser applicationUser);
     int deleteByAppId(long appId);
+    int deleteAppUserByUserId(long userId);
+    List<ApplicationUser> findAppByUser(@Param("user") String user);
 }

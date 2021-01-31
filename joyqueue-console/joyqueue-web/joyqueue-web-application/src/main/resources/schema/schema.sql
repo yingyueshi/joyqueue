@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键id',
   `code` varchar(64) NOT NULL COMMENT '用户英文名',
   `name` varchar(64) DEFAULT NULL COMMENT '用户中文名',
+  `password` varchar(128) DEFAULT NULL COMMENT '密码',
   `org_id` varchar(20) DEFAULT NULL COMMENT '组织id',
   `org_name` varchar(128) DEFAULT NULL COMMENT '组织名',
   `email` varchar(50) DEFAULT NULL COMMENT '邮箱',
@@ -225,5 +226,5 @@ CREATE TABLE IF NOT EXISTS `migration_report` (
 
 -- init default admin USER
 MERGE INTO `user`
-(`id`, `code`, `name`, `org_id`, `org_name`, `email`, `mobile`, `role`, `sign`, `create_by`, `create_time`, `update_by`, `update_time`, `status`)
-VALUES (1, 'admin', 'Admin', NULL, NULL, NULL, NULL, 1, 0, NULL, '2019-01-01 00:00:00', -1, '2019-01-01 00:00:00', 1);
+(`id`, `code`, `name`, `password`, `org_id`, `org_name`, `email`, `mobile`, `role`, `sign`, `create_by`, `create_time`, `update_by`, `update_time`, `status`)
+VALUES (1, 'admin', 'Admin', `123456`, NULL, NULL, NULL, NULL, 1, 0, NULL, '2019-01-01 00:00:00', -1, '2019-01-01 00:00:00', 1);

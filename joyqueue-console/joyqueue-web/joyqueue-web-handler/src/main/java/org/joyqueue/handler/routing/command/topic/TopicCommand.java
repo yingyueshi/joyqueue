@@ -28,18 +28,9 @@ import org.joyqueue.handler.error.ErrorCode;
 import org.joyqueue.handler.routing.command.NsrCommandSupport;
 import org.joyqueue.model.PageResult;
 import org.joyqueue.model.QPageQuery;
-import org.joyqueue.model.domain.AppUnsubscribedTopic;
-import org.joyqueue.model.domain.Broker;
-import org.joyqueue.model.domain.DataCenter;
-import org.joyqueue.model.domain.Topic;
-import org.joyqueue.model.domain.User;
+import org.joyqueue.model.domain.*;
 import org.joyqueue.model.query.QTopic;
-import org.joyqueue.service.BrokerService;
-import org.joyqueue.service.ConsumerService;
-import org.joyqueue.service.DataCenterService;
-import org.joyqueue.service.ProducerService;
-import org.joyqueue.service.TopicPartitionGroupService;
-import org.joyqueue.service.TopicService;
+import org.joyqueue.service.*;
 
 import java.util.Collections;
 import java.util.List;
@@ -74,7 +65,7 @@ public class TopicCommand extends NsrCommandSupport<Topic, TopicService, QTopic>
             new ConfigException(ErrorCode.BadRequest);
         }
         if (topic.getReplica() > topic.getBrokers().size()) topic.setReplica(topic.getBrokers().size());
-        service.addWithBrokerGroup(topic, topic.getBrokerGroup(), topic.getBrokers(), operator);
+        service.addWithBrokerGroup(topic);
         return Responses.success(topic);
     }
 
@@ -94,7 +85,7 @@ public class TopicCommand extends NsrCommandSupport<Topic, TopicService, QTopic>
         Preconditions.checkArgument(null == brokerList || brokerList.size() < 1, topic.getBrokerGroup().getCode() + "分组暂时无可用broker");
         topic.setBrokers(brokerList);
         if (topic.getReplica() > brokerList.size()) topic.setReplica(brokerList.size());
-        service.addWithBrokerGroup(topic, topic.getBrokerGroup(), topic.getBrokers(), operator);
+        service.addWithBrokerGroup(topic);
         return Responses.success(topic);
     }
 

@@ -4,19 +4,15 @@ import com.jd.laf.web.vertx.annotation.Body;
 import com.jd.laf.web.vertx.annotation.Path;
 import com.jd.laf.web.vertx.response.Response;
 import com.jd.laf.web.vertx.response.Responses;
-import org.joyqueue.handler.error.ErrorCode;
 import org.joyqueue.handler.routing.command.CommandSupport;
 import org.joyqueue.model.domain.Identity;
 import org.joyqueue.model.domain.migration.MigrationTask;
 import org.joyqueue.model.query.QMigrationTask;
 import org.joyqueue.service.MigrationTaskService;
-import org.springframework.beans.factory.annotation.Value;
 
-import java.util.Date;
 import java.util.List;
 
 import static com.jd.laf.web.vertx.response.Response.HTTP_BAD_REQUEST;
-import static org.joyqueue.model.domain.migration.MigrationTask.ScopeType.ALL;
 
 public class MigrationTaskCommand extends CommandSupport<MigrationTask, MigrationTaskService, QMigrationTask> {
 

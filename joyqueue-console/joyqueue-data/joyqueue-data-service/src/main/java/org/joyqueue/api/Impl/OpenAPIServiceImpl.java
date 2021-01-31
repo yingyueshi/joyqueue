@@ -335,7 +335,7 @@ public class OpenAPIServiceImpl implements OpenAPIService {
         //计算总数
         topic.setPartitions(topic.getPartitions() * select.size());
         topic.setBrokers(select);
-        topicService.addWithBrokerGroup(topic, topic.getBrokerGroup(), topic.getBrokers(), operator);
+        topicService.addWithBrokerGroup(topic);
         return topicService.findById(topic.getId());    }
 
     @Override
@@ -493,6 +493,11 @@ public class OpenAPIServiceImpl implements OpenAPIService {
             throw new ServiceException(ServiceException.INTERNAL_SERVER_ERROR, e.getMessage());
         }
 
+    }
+
+    @Override
+    public BrokerMonitorRecord brokerMonitor(Subscribe subscribe, boolean active) {
+        return brokerMonitorService.find(subscribe, active);
     }
 
     /**

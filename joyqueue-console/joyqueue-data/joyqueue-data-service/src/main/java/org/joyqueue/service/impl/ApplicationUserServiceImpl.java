@@ -22,6 +22,8 @@ import org.joyqueue.repository.ApplicationUserRepository;
 import org.joyqueue.service.ApplicationUserService;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
  * 应用-用户关联关系 服务
  * Created by chenyanying3 on 2018-10-15
@@ -40,5 +42,15 @@ public class ApplicationUserServiceImpl extends PageServiceSupport<ApplicationUs
     @Override
     public int deleteByAppId(long appId) {
         return repository.deleteByAppId(appId);
+    }
+
+    @Override
+    public int deleteAppUserByUserId(long userId) {
+        return repository.deleteAppUserByUserId(userId);
+    }
+
+    @Override
+    public List<ApplicationUser> findAppByUser(String user) {
+        return repository.findAppByUser(user);
     }
 }

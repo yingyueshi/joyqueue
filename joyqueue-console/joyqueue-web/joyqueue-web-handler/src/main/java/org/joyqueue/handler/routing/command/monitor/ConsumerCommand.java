@@ -49,6 +49,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.joyqueue.handler.Constants.ID;
 import static org.joyqueue.handler.routing.command.monitor.ProducerCommand.CAN_OPERATE_PROPERTY;
 
 
@@ -136,7 +137,7 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
 
     @Override
     @Path("delete")
-    public Response delete(@QueryParam(Constants.ID) String id) throws Exception {
+    public Response delete(@QueryParam(ID) String id) throws Exception {
         Consumer consumer = service.findById(id);
         int count = service.delete(consumer);
         if (count <= 0) {
@@ -144,6 +145,20 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
         }
         //afterDelete(model);
         return Responses.success();
+    }
+
+    @Path("queryByTopic")
+    public Response queryByTopic(@Body QConsumer qConsumer) throws Exception {
+        if (qConsumer.getTopic() == null || qConsumer.getTopic().getCode() == null) {
+            return Responses.error(Response.HTTP_BAD_REQUEST, "Empty topic!");
+        }
+        String namespace = null;
+        String topic = qConsumer.getTopic().getCode();
+        if (null != qConsumer.getTopic().getNamespace()) {
+            namespace = qConsumer.getTopic().getNamespace().getCode();
+        }
+        List<Consumer> consumers = service.findByTopic(topic, namespace);
+        return Responses.success(consumers);
     }
 
     @Path("configAddOrUpdate")
@@ -155,7 +170,6 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
         }
         return Responses.success();
     }
-
 
     /**
      * 同步producer
@@ -230,4 +244,37 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
         return Responses.success(service.findAppsByTopic(topic));
     }
 
+    @Path("checkRegion")
+    public Response checkRegion(@QueryParam("app") String app,
+                                @QueryParam("subscribeGroup") String subscribeGroup,
+                                @QueryParam("region") String region) throws Exception {
+        if (StringUtils.isNotBlank(app) && StringUtils.isNotBlank(region)) {
+            List<Consumer> consumers = consumerNameServerService.findByApp(app);
+            if (StringUtils.isNotBlank(subscribeGroup)) {
+                consumers = consumers.stream().filter(consumer -> subscribeGroup.equals(consumer.getSubscribeGroup()))
+                        .collect(Collectors.toList());
+            }
+            consumers = consumers.stream().filter(consumer -> consumer.getConfig() != null
+                    && StringUtils.isNotBlank(consumer.getConfig().getRegion())
+                    && !region.equals(consumer.getConfig().getRegion()))
+                    .collect(Collectors.toList());
+            return Responses.success(consumers.size() == 0);
+
+        }
+        return Responses.error(500, "app, region can't be empty");
+    }
+
+    @Path("updateRegion")
+    public Response updateRegion(@QueryParam("consumerId") String consumerId,
+                                @QueryParam("region") String region) throws Exception {
+        if (StringUtils.isNotBlank(consumerId)) {
+            Consumer consumer = service.findById(consumerId);
+            String app = consumer.getApp().getCode();
+            String subscribeGroup = consumer.getSubscribeGroup();
+            service.updateAllConsumerRegion(app, subscribeGroup, region);
+            return Responses.success();
+
+        }
+        return Responses.error(500, "consumerId can't be empty");
+    }
 }

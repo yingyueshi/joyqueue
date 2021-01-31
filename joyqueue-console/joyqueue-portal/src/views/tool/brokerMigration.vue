@@ -7,7 +7,7 @@
         <d-option :value="1">新建</d-option>
         <d-option :value="2">迁移中</d-option>
         <d-option :value="3">迁移成功</d-option>
-        <d-option :value="4">迁移有失败</d-option>
+        <d-option :value="4">迁移完成，有失败</d-option>
       </d-select>
 <!--      <d-input v-model="searchData.keyword" placeholder="broker id/ip" class="left mr10" style="width: 213px">-->
 <!--        <icon name="search" size="14" color="#CACACA" slot="suffix" @click="getList"></icon>-->
@@ -16,10 +16,15 @@
       <d-button type="primary" icon='plus' color="danger" @click="openAddMigrateTaskDialog('addMigrateTaskDialog')">
         批量迁移
       </d-button>
-      <my-table :optional="false" :data="tableData" :showPin="showTablePin" :page="page"></my-table>
+      <my-table :optional="false" :data="tableData" :showPin="showTablePin" :page="page" @on-detail="openDetailDialog"></my-table>
       <my-dialog class="maxDialogHeight" :dialog="addMigrateTaskDialog" visible="false" @on-dialog-confirm="addConfirm()"
                  @on-dialog-cancel="dialogCancel('addMigrateTaskDialog')">
         <broker-migration-form ref="migrateTaskCreationForm" @on-dialog-cancel="dialogCancel('addMigrateTaskDialog')"/>
+      </my-dialog>
+      <my-dialog class="maxDialogHeight" :dialog="detailDialog" visible="false" @on-dialog-cancel="dialogCancel('detailDialog')">
+        <my-table :optional="true" :data="detailDialog.tableData" :showPin="false" :show-pagination="false"
+                  @on-selection-change="handleTopicSelectionChange">
+        </my-table>
       </my-dialog>
     </div>
   </div>
@@ -31,6 +36,7 @@ import myDialog from '../../components/common/myDialog.vue'
 import crud from '../../mixins/crud.js'
 import {timeStampToString} from '../../utils/dateTimeUtils'
 import brokerMigrationForm from './brokerMigrationForm'
+import apiRequest from '../../utils/apiRequest.js'
 
 export default {
   name: 'brokerMigrate',
@@ -120,26 +126,10 @@ export default {
         ],
         // 表格操作，如果需要根据特定值隐藏显示， 设置bindKey对应的属性名和bindVal对应的属性值
         btns: [
-          /* {
-              txt: '编辑',
-              method: 'on-edit'
-            },
-            {
-              txt: '删除',
-              method: 'on-del'
-            }, */
-          // {
-          //   txt: '停止',
-          //   method: 'on-stop'
-          // },
-          // {
-          //   txt: '查看迁移进度',
-          //   method: 'on-progress'
-          // },
-          // {
-          //   txt: '查看错误',
-          //   method: 'on-error'
-          // }
+          {
+            txt: '详情',
+            method: 'on-detail'
+          }
         ]
       },
       addMigrateTaskDialog: {
@@ -147,6 +137,20 @@ export default {
         title: '创建迁移任务',
         width: 900,
         showFooter: false
+      },
+      detailDialog: {
+        visible: false,
+        title: '详情',
+        width: 1200,
+        showFooter: false,
+        tableData: {
+          rowData: [],
+          colData: [
+            {
+
+            }
+          ]
+        }
       }
     }
   },
@@ -154,8 +158,24 @@ export default {
     openAddMigrateTaskDialog (dialog) {
       this[dialog].visible = true
     },
+    openDetailDialog (item) {
+      this.detailDialog.visible = true
+      this.getDetails(item)
+    },
     change () {
       this.getList()
+    },
+    getDetails (item) {
+      this.showTablePin = true
+      let data = this.getSearchVal()
+      apiRequest.post(this.urlOrigin.detail + '/' + item.id, {}, data).then((data) => {
+        if (data === '') {
+          return
+        }
+        data.data = data.data || []
+        this.detailDialog.tableData.rowData = data.data
+        this.detailDialog.showTablePin = false
+      })
     }
   },
   mounted () {

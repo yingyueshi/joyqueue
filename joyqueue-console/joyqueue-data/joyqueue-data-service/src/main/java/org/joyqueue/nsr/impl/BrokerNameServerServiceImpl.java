@@ -167,6 +167,8 @@ public class BrokerNameServerServiceImpl extends NameServerBase implements Broke
             brokerQuery.setIp(query.getIp());
             brokerQuery.setKeyword(query.getKeyword());
             brokerQuery.setBrokerList(query.getInBrokerIds());
+// todo nsr 不支持
+//            brokerQuery.setFuzzy(query.getFuzzy());
         }
         return brokerQuery;
     }

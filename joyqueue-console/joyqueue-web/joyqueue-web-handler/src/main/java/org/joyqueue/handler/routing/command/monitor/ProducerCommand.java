@@ -16,6 +16,7 @@
 package org.joyqueue.handler.routing.command.monitor;
 
 import com.alibaba.fastjson.JSONObject;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.jd.laf.binding.annotation.Value;
 import com.jd.laf.web.vertx.annotation.Body;
@@ -25,7 +26,6 @@ import com.jd.laf.web.vertx.response.Response;
 import com.jd.laf.web.vertx.response.Responses;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.joyqueue.handler.Constants;
 import org.joyqueue.handler.annotation.PageQuery;
 import org.joyqueue.handler.error.ConfigException;
 import org.joyqueue.handler.routing.command.NsrCommandSupport;
@@ -44,6 +44,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static org.joyqueue.handler.Constants.ID;
 
 
 public class ProducerCommand extends NsrCommandSupport<Producer, ProducerService, QProducer> {
@@ -97,13 +99,7 @@ public class ProducerCommand extends NsrCommandSupport<Producer, ProducerService
 
         if (appFlag) {
             if (CollectionUtils.isNotEmpty(producers) && session.getRole() != User.UserRole.ADMIN.value()) {
-                Iterator<Producer> iterator = producers.iterator();
-                while (iterator.hasNext()) {
-                    Producer producer = iterator.next();
-                    if (applicationUserService.findByUserApp(session.getCode(), producer.getApp().getCode()) == null) {
-                        iterator.remove();
-                    }
-                }
+                producers.removeIf(producer -> applicationUserService.findByUserApp(session.getCode(), producer.getApp().getCode()) == null);
             }
         }
 
@@ -139,7 +135,7 @@ public class ProducerCommand extends NsrCommandSupport<Producer, ProducerService
 
     @Override
     @Path("delete")
-    public Response delete(@QueryParam(Constants.ID) String id) throws Exception {
+    public Response delete(@QueryParam(ID) String id) throws Exception {
         Producer producer = service.findById(id);
         int count = service.delete(producer);
         if (count <= 0) {
@@ -149,7 +145,7 @@ public class ProducerCommand extends NsrCommandSupport<Producer, ProducerService
     }
 
     @Path("weight")
-    public Response findPartitionGroupWeight(@QueryParam(Constants.ID) String id) throws Exception {
+    public Response findPartitionGroupWeight(@QueryParam(ID) String id) throws Exception {
         Producer producer = service.findById(id);
         List<PartitionGroupWeight> currentWeights = new ArrayList<>();
         if (!NullUtil.isEmpty(producer)) {
@@ -184,6 +180,28 @@ public class ProducerCommand extends NsrCommandSupport<Producer, ProducerService
         }
         return Responses.success(currentWeights);
     }
+
+    @Path("updateWeight")
+    public Response updateWeight(@QueryParam(ID) String id, @Body Map<String, Object> body) throws Exception {
+        Producer producer = service.findById(id);
+        if (body.containsKey("weight")) {
+            if (producer.getConfig() == null) {
+                producer.setConfig(new ProducerConfig());
+            }
+            producer.getConfig().setWeight(body.get("weight").toString());
+        }
+        service.update(producer);
+        return Responses.success();
+    }
+
+    @Path("configAddOrUpdate")
+    public Response configAddOrUpdate(@Body ProducerConfig producerConfig) throws Exception {
+        Preconditions.checkArgument(null!=producerConfig,  "invalid argument");
+        Producer producer = service.findById(producerConfig.getProducerId());
+        producer.setConfig(producerConfig);
+        return Responses.success(service.update(producer));
+    }
+
 
     /**
      * 同步producer

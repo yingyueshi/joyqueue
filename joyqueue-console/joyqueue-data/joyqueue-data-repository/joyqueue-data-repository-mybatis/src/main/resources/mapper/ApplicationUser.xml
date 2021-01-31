@@ -74,6 +74,10 @@
         DELETE FROM application_user WHERE id=#{id}
     </delete>
 
+    <delete id="deleteAppUserByUserId" parameterType="long">
+        DELETE FROM application_user WHERE user_id = #{userId}
+    </delete>
+
     <delete id="deleteByAppId" parameterType="long">
         DELETE FROM application_user WHERE app_id=#{appId}
     </delete>
@@ -121,7 +125,15 @@
         <include refid="baseColumn"/>
         FROM
         application_user
-        WHERE app_code = #{application.code} and user_code=#{user.code}
+        WHERE app_code = #{application.code} and user_code=#{user.code} and status != -1
+    </select>
+
+    <select id="findAppByUser" resultMap="baseResultMap" parameterType="java.lang.String">
+        SELECT
+        <include refid="baseColumn"/>
+        FROM
+        application_user
+        WHERE user_code=#{user} and status != -1
     </select>
 
 </mapper>

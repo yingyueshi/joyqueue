@@ -87,7 +87,8 @@ export default {
     searchBroker: '/broker/search',
     searchTopic: '/topic/findByBroker',
     analysis: '/migration/analysis',
-    add: '/migration/add'
+    add: '/migration/add',
+    detail: '/migrationSubjob/getByMigrationId'
   },
   common: {
     findSubscribeGroup: `/consumer/findAllSubscribeGroups`,

@@ -116,7 +116,7 @@ public class MigrationTaskServiceImpl extends PageServiceSupport<MigrationTask, 
                     return;
                 }
                 // 目标Broker已经在分区组里面存在
-                List<MigrationTarget> filteredTargets = targets.stream().filter(target -> !pg.getReplicas().contains(target))
+                List<MigrationTarget> filteredTargets = targets.stream().filter(target -> !pg.getReplicas().contains(target.getBrokerId()))
                         .collect(Collectors.toList());
                 if (filteredTargets.size() == 0) {
                     MigrationReport report = new MigrationReport(No_target, pg.getTopic().getCode(), pg.getNamespace().getCode(), pg.getGroupNo());
