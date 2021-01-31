@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -55,6 +56,7 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
     private long nsrUpdateCheckInterval;
     private long replicationCheckTimeout;
     private long replicationCheckInterval;
+    private int sourceLimitType;
 
     private static MigrationSubjob executeSubjob;
 
@@ -73,6 +75,7 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
         nsrUpdateCheckInterval = Long.parseLong(config.getProperty(NSR_UPDATE_CHECK_INTERVAL.getName(), NSR_UPDATE_CHECK_INTERVAL.getValue().toString()));
         replicationCheckTimeout = Long.parseLong(config.getProperty(REPLICATION_CHECK_TIMEOUT.getName(), REPLICATION_CHECK_TIMEOUT.getValue().toString()));
         replicationCheckInterval = Long.parseLong(config.getProperty(REPLICATION_CHECK_INTERVAL.getName(), REPLICATION_CHECK_INTERVAL.getValue().toString()));
+        sourceLimitType = Integer.parseInt(config.getProperty(SOURCE_LIMIT_TYPE.getName(), SOURCE_LIMIT_TYPE.getValue().toString()));
     }
 
     @Scheduled(fixedDelay = 5 * 1000)
@@ -97,14 +100,21 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
         List<MigrationSubjob> dispatches = migrationSubjobService.findByStatus(MigrationSubjob.DISPATCHED);
         dispatches.addAll(runnings);
 
-        List<Integer> leaders = dispatches.stream().map(dispatch -> {
+        List<Integer> leaders = new ArrayList<>();
+        dispatches.forEach(dispatch -> {
             TopicPartitionGroup group = topicPartitionGroupService.findByTopicAndGroup(dispatch.getNamespaceCode(),
                     dispatch.getTopicCode(), dispatch.getPgNo());
             if (group == null) {
-                return -1;
+                return;
             }
-            return group.getLeader();
-        }).filter(leader -> leader > 0).collect(Collectors.toList());
+            if (sourceLimitType == 1) {
+                leaders.add(group.getLeader());
+            } else {
+                leaders.addAll(group.getReplicas().stream().filter(replica -> !replica.equals(dispatch.getSrcBrokerId()) &&
+                        !replica.equals(dispatch.getTgtBrokerId())).collect(Collectors.toList()));
+            }
+        });
+        logger.info("派发任务，过滤源: [{}]", leaders.toString());
         List<MigrationSubjob> newSubjobs = migrationSubjobService.findByStatus(MigrationSubjob.NEW);
         A: for (MigrationSubjob subjob : newSubjobs) {
             // 分区组不能存在当前已派发的任务中
