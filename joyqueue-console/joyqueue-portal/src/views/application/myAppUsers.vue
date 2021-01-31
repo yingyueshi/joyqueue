@@ -62,7 +62,7 @@ export default {
         rowData: [],
         colData: [
           {
-            title: 'erp',
+            title: '英文名',
             key: 'code',
             width: '12%'
           },

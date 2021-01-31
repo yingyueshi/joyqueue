@@ -1,6 +1,11 @@
 {
   "zh-CN": [
     {
+      "name": "login",
+      "path": "/login",
+      "component": "login/login.vue"
+    },
+    {
       "name": "application",
       "path": "/application",
       "component": "application/index.vue"
@@ -117,6 +122,11 @@
   ],
   "en-US": [
     {
+      "name": "login",
+      "path": "/login",
+      "component": "login/login.vue"
+    },
+    {
       "name": "application",
       "path": "/application",
       "component": "application/index.vue"
@@ -180,11 +190,6 @@
           "path": "brokerMonitor",
           "name": "brokerMonitor",
           "component": "setting/brokerMonitor.vue"
-        },
-        {
-          "path": "brokerMigration",
-          "name": "brokerMigration",
-          "component": "setting/brokerMigration.vue"
         },
         {
           "path": "metric",
