@@ -294,6 +294,23 @@ public class DbConsoleMessageRetry implements ConsoleMessageRetry<Long> {
         }
     }
 
+    private static final String UPDATE_SQL_BYID = "update message_retry set status = ?,update_time = ?, update_by = ? where  id in ( ? ) ";
+
+    @Override
+    public void batchUpdateStatusById(List<Long> messageIds,RetryStatus status,long updateTime, int updateBy) throws Exception {
+        int update = DaoUtil.update(dataSource,messageIds, UPDATE_SQL_BYID, (DaoUtil.UpdateCallback<Long>) (statement, target) -> {
+            statement.setShort(1, status.getValue());
+            statement.setTimestamp(2, new Timestamp(updateTime));
+            statement.setInt(3, updateBy);
+            statement.setLong(4, target);
+        });
+        if (update > 0) {
+            logger.info("update retry message success by messageId:{}, status:{}", messageIds.toString(), status);
+        } else {
+            logger.error("update retry message error by messageId:{}, status:{}", messageIds.toString(), status);
+        }
+    }
+
     @Override
     public int cleanBefore(String topic, String app, int status, long expireTimeStamp) throws Exception {
         return DaoUtil.delete(dataSource,1, CLEAN_BEFORE, new DaoUtil.UpdateCallback<Integer>() {

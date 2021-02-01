@@ -163,6 +163,12 @@ public class RetryServiceImpl implements RetryService {
 
 
     @Override
+    public void batchUpdateStatusById(List<Long> messageIds, RetryStatus status, long updateTime, int updateBy) throws Exception {
+        consoleMessageRetry.batchUpdateStatusById(messageIds, status, updateTime, updateBy);
+    }
+
+
+    @Override
     public int cleanBefore(String topic, String app, int status, long expireTimeStamp) throws Exception {
         return consoleMessageRetry.cleanBefore(topic,app,status,expireTimeStamp);
     }

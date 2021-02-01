@@ -26,6 +26,7 @@ import com.jd.laf.web.vertx.annotation.QueryParam;
 import com.jd.laf.web.vertx.pool.Poolable;
 import com.jd.laf.web.vertx.response.Response;
 import com.jd.laf.web.vertx.response.Responses;
+import org.apache.commons.lang3.StringUtils;
 import org.joyqueue.domain.ConsumeRetry;
 import org.joyqueue.domain.TopicName;
 import org.joyqueue.exception.JoyQueueException;
@@ -62,6 +63,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static com.jd.laf.web.vertx.response.Response.HTTP_BAD_REQUEST;
 import static com.jd.laf.web.vertx.response.Response.HTTP_INTERNAL_ERROR;
@@ -292,6 +294,19 @@ public class RetryCommand implements Command<Response>, Poolable {
         retryService.batchDelete(retryQueryCondition,SystemClock.now(),operator.getId().intValue());
         return Responses.success();
     }
+
+    @Path("batchDeleteById")
+    public Response batchDeleteById(@QueryParam(Constants.IDS) String ids) throws Exception {
+        if (Strings.isNullOrEmpty(ids)) {
+            return Responses.error(HTTP_BAD_REQUEST, HTTP_BAD_REQUEST, "ID 不能为空");
+        }
+        String[] idArray = StringUtils.split(ids, ",");
+        List<Long> messageIds = Arrays.stream(idArray).map(s -> Long.parseLong(s.trim())).collect(Collectors.toList());
+        retryService.batchUpdateStatusById(messageIds, RetryStatus.RETRY_DELETE, SystemClock.now(), operator.getId().intValue());
+        return Responses.success();
+    }
+
+
     /**
      * 批量恢复
      * @param ids

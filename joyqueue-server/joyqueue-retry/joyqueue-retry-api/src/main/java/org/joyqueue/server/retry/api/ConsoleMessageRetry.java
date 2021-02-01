@@ -35,6 +35,7 @@ public interface ConsoleMessageRetry<T> extends MessageRetry<T> {
 
     void batchUpdateStatus(RetryQueryCondition retryQueryCondition, RetryStatus status, long updateTime, int updateBy) throws Exception;
 
+    void batchUpdateStatusById(List<Long> messageIds,RetryStatus status,long updateTime, int updateBy) throws Exception;
     /**
      *
      * Physical delete retry message by topic,app ,the status and update time before  expire time
