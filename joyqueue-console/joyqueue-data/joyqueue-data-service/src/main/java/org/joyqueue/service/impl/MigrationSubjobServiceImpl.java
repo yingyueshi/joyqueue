@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import java.util.Date;
 import java.util.List;
 
-@Service("migrationScopeService")
+@Service("migrationSubjobService")
 public class MigrationSubjobServiceImpl extends ServiceSupport<MigrationSubjob, MigrationSubjobRepository> implements MigrationSubjobService {
 
     @Override
