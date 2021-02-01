@@ -114,7 +114,9 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
                         !replica.equals(dispatch.getTgtBrokerId())).collect(Collectors.toList()));
             }
         });
-        logger.info("派发任务，过滤源: [{}]", leaders.toString());
+        if (!leaders.isEmpty()) {
+            logger.debug("派发任务，过滤源: [{}]", leaders.toString());
+        }
         List<MigrationSubjob> newSubjobs = migrationSubjobService.findByStatus(MigrationSubjob.NEW);
         A: for (MigrationSubjob subjob : newSubjobs) {
             // 分区组不能存在当前已派发的任务中

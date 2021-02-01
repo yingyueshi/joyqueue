@@ -22,8 +22,7 @@
         <broker-migration-form ref="migrateTaskCreationForm" @on-dialog-cancel="dialogCancel('addMigrateTaskDialog')"/>
       </my-dialog>
       <my-dialog class="maxDialogHeight" :dialog="detailDialog" visible="false" @on-dialog-cancel="dialogCancel('detailDialog')">
-        <my-table :optional="true" :data="detailDialog.tableData" :showPin="false" :show-pagination="false"
-                  @on-selection-change="handleTopicSelectionChange">
+        <my-table :optional="false" :data="detailDialog.tableData" :showPin="false" :show-pagination="false" >
         </my-table>
       </my-dialog>
     </div>
@@ -58,7 +57,7 @@ export default {
           {
             title: 'ID',
             key: 'id',
-            width: '9%'
+            width: '7%'
           },
           {
             title: '来源Broker',
@@ -112,13 +111,13 @@ export default {
           },
           {
             title: '创建人',
-            key: 'createBy.code',
+            key: 'createBy.id',
             width: '10%'
           },
           {
             title: '创建时间',
             key: 'createTime',
-            width: '15%',
+            width: '26%',
             formatter (item) {
               return timeStampToString(item.createTime)
             }
@@ -147,7 +146,73 @@ export default {
           rowData: [],
           colData: [
             {
-
+              title: 'ID',
+              key: 'id',
+              width: '9%'
+            },
+            {
+              title: '执行器',
+              key: 'executor',
+              width: '15%'
+            },
+            {
+              title: '主题',
+              key: 'topicCode',
+              width: '10%'
+            },
+            {
+              title: '命名空间',
+              key: 'namespaceCode',
+              width: '10%'
+            },
+            {
+              title: '分区组',
+              key: 'pgNo',
+              width: '6%'
+            },
+            {
+              title: '状态',
+              key: 'status',
+              width: '10%',
+              formatter (row) {
+                if (row.status === 0) {
+                  return '新建'
+                }
+                if (row.status === 1) {
+                  return '已派发'
+                }
+                if (row.status === 2) {
+                  return '执行中'
+                }
+                if (row.status === 2) {
+                  return '执行中'
+                }
+                if (row.status === 3) {
+                  return '已成功'
+                }
+                if (row.status === 4) {
+                  return '已失败'
+                }
+                if (row.status === 5) {
+                  return '失败，待重试'
+                }
+                if (row.status === -1) {
+                  return '已删除'
+                }
+              }
+            },
+            {
+              title: '创建人',
+              key: 'createBy.id',
+              width: '10%'
+            },
+            {
+              title: '创建时间',
+              key: 'createTime',
+              width: '20%',
+              formatter (item) {
+                return timeStampToString(item.createTime)
+              }
             }
           ]
         }
