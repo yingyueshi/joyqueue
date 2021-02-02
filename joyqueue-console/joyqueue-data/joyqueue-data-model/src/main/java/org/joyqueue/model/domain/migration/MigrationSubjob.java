@@ -1,6 +1,7 @@
 package org.joyqueue.model.domain.migration;
 
 import org.apache.commons.lang3.StringUtils;
+import org.joyqueue.domain.TopicName;
 import org.joyqueue.model.domain.BaseModel;
 
 import static org.joyqueue.domain.TopicName.DEFAULT_NAMESPACE;
@@ -126,5 +127,11 @@ public class MigrationSubjob extends BaseModel {
 
     public void setException(String exception) {
         this.exception = exception;
+    }
+
+    @Override
+    public String toString() {
+        return "Subjob{topic=" + TopicName.parse(topicCode, namespaceCode).getFullName() + '-' + pgNo
+                + ",id=" + id + ",task=" + migrationId + "}";
     }
 }

@@ -1,6 +1,7 @@
 package org.joyqueue.service.impl;
 
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang.StringUtils;
 import org.joyqueue.domain.TopicName;
 import org.joyqueue.model.domain.TopicPartitionGroup;
 import org.joyqueue.model.domain.migration.MigrationReport;
@@ -18,7 +19,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -63,7 +63,11 @@ public class MigrationTaskServiceImpl extends PageServiceSupport<MigrationTask, 
     public String analysis(MigrationTask task, boolean add) {
         List<MigrationTarget> targets = task.getTargets();
         if (CollectionUtils.isEmpty(targets)) {
-            throw new NotFoundException("没有目标Broker！");
+            throw new NotFoundException("没有目标Broker!");
+        }
+
+        if (targets.stream().map(t -> t.getBrokerId()).collect(Collectors.toList()).contains(task.getSrcBrokerId())) {
+            throw new NotFoundException("目标Broker不能包含源Broker!");
         }
 
         final List<MigrationSubjob> subjobs = new ArrayList<>();
@@ -73,26 +77,34 @@ public class MigrationTaskServiceImpl extends PageServiceSupport<MigrationTask, 
         targets.forEach(target -> targetPgCount.put(target, 0));
 
         try {
-            List<TopicName> topicNames;
+            final List<TopicName> allTopics = topicService.findTopic(String.valueOf(task.getSrcBrokerId()));
+            List<TopicName> topicNames = new ArrayList<>();
             switch (task.getScopeType()) {
                 case TOPICS:
                     String scopes = task.getScopes();
                     if (StringUtils.isEmpty(scopes)) {
                         throw new BusinessException("迁移范围为指定主题，但是指定主题为空。");
                     }
-                    topicNames = Arrays.stream(scopes.split(",")).map(topic -> TopicName.parse(topic)).collect(Collectors.toList());
+                    topicNames = Arrays.stream(scopes.split(",")).map(topic-> StringUtils.isBlank(topic) ? null : TopicName.parse(topic.trim()))
+                            .filter(topic -> {
+                                if (topic == null || !allTopics.contains(topic)) {
+                                    MigrationReport report = new MigrationReport(Not_in_source_broker, topic.getCode(), topic.getNamespace(), -1);
+                                    errSubjobs.add(report);
+                                    return false;
+                                }
+                                return true;
+                            }).collect(Collectors.toList());
                     break;
                 case EXCLUDE_TOPICS:
-                    topicNames = topicService.findTopic(String.valueOf(task.getSrcBrokerId()));
                     scopes = task.getScopes();
                     if (!StringUtils.isEmpty(scopes)) {
                         List<TopicName> excludeTopicNames = Arrays.stream(scopes.split(",")).map(topic ->
                                 TopicName.parse(topic)).collect(Collectors.toList());
+                        topicNames = allTopics;
                         topicNames.removeAll(excludeTopicNames);
                     }
                     break;
                 default:
-                    topicNames = topicService.findTopic(String.valueOf(task.getSrcBrokerId()));
                     break;
             }
 
@@ -205,7 +217,7 @@ public class MigrationTaskServiceImpl extends PageServiceSupport<MigrationTask, 
     public String convertReport(List<MigrationReport> reports) {
         return reports.stream().collect(Collectors.groupingBy(MigrationReport::getType,
                 Collectors.mapping(MigrationReport::getPgDescriptor, Collectors.joining(","))))
-                .entrySet().stream().map(entry -> entry.getKey() + ": " + entry.getValue() + ".")
+                .entrySet().stream().map(entry -> entry.getKey().value() + ": " + entry.getValue() + ".")
                 .collect(Collectors.joining("\n"));
     }
 

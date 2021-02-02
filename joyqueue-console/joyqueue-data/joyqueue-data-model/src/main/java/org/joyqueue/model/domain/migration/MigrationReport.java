@@ -70,7 +70,8 @@ public class MigrationReport extends BaseModel {
         Lack_replica(2, "缺少副本"),
         No_target(3, "没有可替换的Broker"),
         Even_replica(4, "偶数副本"),
-        Only_add(5, "只添加不摘除");
+        Only_add(5, "只添加不摘除"),
+        Not_in_source_broker(6, "不在源目标中");
 
         private int value;
         private String desc;

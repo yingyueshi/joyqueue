@@ -19,11 +19,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 
@@ -66,7 +62,7 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
         try {
             config.load(Thread.currentThread().getContextClassLoader().getResourceAsStream("application.properties"));
             logger.info("broker migration config loaded successfully. ");
-        } catch (IOException e) {
+        } catch (Exception e) {
             logger.error("Failed to read broker migration config , error: {}", e.getMessage());
         }
 
@@ -85,10 +81,12 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
         List<MigrationSubjob> runnings = migrationSubjobService.findByExecutor(localIp, MigrationSubjob.RUNNING);
         runnings.forEach(run -> {
             if (executeSubjob == null || run.getId() != executeSubjob.getId()) {
-                run.setStatus(MigrationSubjob.DISPATCHED);
-                run.setUpdateBy(new Identity(LocalSession.getSession().getUser()));
-                migrationSubjobService.updateStatus(run);
-                logger.warn(String.format("执行作业%s状态为执行中，但是却不在执行器中，回滚为已派发状态。", run.getId()));
+                if (SystemClock.now() - run.getUpdateTime().getTime() > 5000L) {
+                    run.setStatus(MigrationSubjob.DISPATCHED);
+                    run.setUpdateBy(new Identity(LocalSession.getSession().getUser()));
+                    migrationSubjobService.updateStatus(run);
+                    logger.warn(String.format("执行作业%s状态为执行中，但是却不在执行器中，回滚为已派发状态。", run.getId()));
+                }
             }
         });
         // 每次派发一个
@@ -115,7 +113,7 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
             }
         });
         if (!leaders.isEmpty()) {
-            logger.debug("派发任务，过滤源: [{}]", leaders.toString());
+            logger.info("派发任务，过滤源: {}", leaders.toString());
         }
         List<MigrationSubjob> newSubjobs = migrationSubjobService.findByStatus(MigrationSubjob.NEW);
         A: for (MigrationSubjob subjob : newSubjobs) {
@@ -134,6 +132,7 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
                     continue A;
                 }
             }
+            logger.info("派发任务: {}", subjob.toString());
             migrationSubjobService.updateExecutor(subjob.getId(), IpUtil.getLocalIp(), MigrationSubjob.DISPATCHED);
             break A;
         }
@@ -190,7 +189,8 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
 
     private void executeReplica(MigrationSubjob subjob) {
         lock.writeLock().lock();
-        logger.info("Execute replica task: {}", subjob);
+        String subjobStr = subjob.toString();
+        logger.info("执行任务: {}", subjobStr);
         try {
             TopicPartitionGroup group = topicPartitionGroupService.findByTopicAndGroup(subjob.getNamespaceCode(),
                     subjob.getTopicCode(), subjob.getPgNo());
@@ -198,8 +198,8 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
             if (group.getReplicas().contains(subjob.getSrcBrokerId())) {
                 // 如果leader没有选出来 直接下一轮等待选举结果
                 if (group.getLeader() == null || group.getLeader() < 0) {
-                    logger.warn("主题分区组leader节点未选举成功,需等待下轮检查,主题[{}],分组[{}],该分区组源leader节点[{}]",
-                            subjob.getTopicCode(), subjob.getPgNo(), subjob.getSrcBrokerId());
+                    logger.warn("主题分区组leader节点未选举成功,需等待下轮检查: {}", subjobStr);
+                    executeSubjob = null;
                     return;
                 }
                 // 源目标是leader，先切走
@@ -208,15 +208,15 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
                     Set<Integer> replicas = group.getReplicas();
                     // 单副本
                     if (replicas.size() < 2) {
-                        logger.error("replicas副本数是偶数,不满足切换leader条件,task[{}],replicas[{}]", subjob, replicas);
+                        logger.error("replicas副本数是偶数,不满足切换leader条件: {} ,replicas[{}]", subjobStr, replicas);
                         migrationSubjobService.fail(subjob.getId(), "replicas副本数是偶数,不满足切换leader条件", FAILED_NO_RETRY);
                         throw new MigrationException("replicas副本数是偶数,不满足切换leader条件.");
                     }
                     // 偶数副本
                     if (group.getReplicas().size() % 2 == 0) {
-                        logger.error("replicas副本数是单副本,不满足切换leader条件, subjob[{}],replicas[{}]", subjob, replicas);
+                        logger.error("replicas副本数是单副本,不满足切换leader条件: {},replicas[{}]", subjobStr, replicas);
                         migrationSubjobService.fail(subjob.getId(), "replicas副本数是单副本,不满足切换leader条件", FAILED_NO_RETRY);
-                        throw new MigrationException("replicas副本数是单副本,不满足切换leader条件.");
+                        throw new MigrationException("replicas副本数是单副本,不满足切换leader条件");
                     }
                     // 切leader
                     isLeaderChanged = leaderChange(subjob, replicas);
@@ -227,12 +227,12 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
                     try {
                         removeReplica(subjob);
                     } catch (Exception e) {
-                        logger.error("摘除源Broker失败,subjob[{}]", subjob);
+                        logger.error("摘除源Broker失败: {}", subjobStr);
                         migrationSubjobService.fail(subjob.getId(), "摘除源Broker失败", FAILED_NO_RETRY);
                         throw new MigrationException("摘除源Broker失败");
                     }
                 } else {
-                    logger.error("切Leader失败,subjob[{}]", subjob);
+                    logger.error("切Leader失败: {}", subjobStr);
                     migrationSubjobService.fail(subjob.getId(), "切Leader失败", FAILED_NO_RETRY);
                     throw new MigrationException("切Leader失败");
                 }
@@ -242,36 +242,50 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
             try {
                 addReplica(subjob);
             } catch (Exception e) {
-                logger.error("添加目标Broker失败,subjob[{}]", subjob);
+                logger.error("添加目标Broker失败: {}", subjobStr);
                 migrationSubjobService.fail(subjob.getId(), "添加目标Broker失败", FAILED_NO_RETRY);
                 throw new MigrationException("添加目标Broker失败");
             }
 
             // 监听
-            long leaderPosition;
-            try {
-                leaderPosition = getLeaderPosition(subjob);
-            } catch (Exception e) {
-                logger.error(String.format("获取Leader当前位置失败, subjob: %s ", subjob), e);
+            long leaderPosition = -1L;
+            long startTime = SystemClock.now();
+            while (SystemClock.now() - startTime < nsrUpdateCheckTimeout) {
+                try {
+                    Thread.sleep(nsrUpdateCheckInterval);
+                } catch (InterruptedException e) {
+                    logger.error("sleep2 失败");
+                }
+
+                try {
+                    leaderPosition = getLeaderPosition(subjob);
+                } catch (Exception e) {
+                    logger.error(String.format("获取Leader当前位置失败, subjob: %s ", subjobStr), e);
+                }
+            }
+
+            if (leaderPosition < 0L) {
+                logger.error("获取Leader当前位置失败(-1): {} ", subjobStr);
+                executeSubjob = null;
                 return;
             }
 
-            long startTime = SystemClock.now();
+            startTime = SystemClock.now();
             while (SystemClock.now() - startTime < replicationCheckTimeout) {
-                if (checkReplicationPosition(subjob, leaderPosition)) {
-                    logger.info(String.format("迁移执行成功, subjob: %s ", subjob));
-                    migrationSubjobService.success(subjob.getId(), SUCCESSED);
-                    return;
-                }
                 try {
                     Thread.sleep(replicationCheckInterval);
                 } catch (InterruptedException e) {
-                    logger.error("sleep 失败");
+                    logger.error("sleep3 失败");
+                }
+
+                if (checkReplicationPosition(subjob, leaderPosition)) {
+                    logger.info("迁移执行成功: {} ", subjobStr);
+                    migrationSubjobService.success(subjob.getId(), SUCCESSED);
+                    return;
                 }
             }
-
         } catch (Exception e) {
-            logger.error(String.format("迁移执行失败, subjob: %s ", subjob), e);
+            logger.error(String.format("迁移执行失败: {}", subjobStr), e);
             migrationSubjobService.fail(subjob.getId(), "调度迁移执行失败, cause:" + e.getMessage(), FAILED_NO_RETRY);
         } finally {
             lock.writeLock().unlock();
@@ -284,15 +298,16 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
         if (subjob.getSrcBrokerId() != group.getLeader()) {
             return true;
         }
-        logger.info("Replica leader change: {}", subjob);
+        String subjobStr = subjob.toString();
+        logger.info("切换Leader: {}", subjobStr);
         List<Integer> candidates = replicas.stream().filter(r -> !r.equals(subjob.getSrcBrokerId())).collect(Collectors.toList());
         if (candidates.size() < 1) {
-            logger.error("replicas副本数是单副本,不满足切换leader条件,task[{}],replicas[{}]", subjob, replicas);
+            logger.error("replicas副本数是单副本,不满足切换leader条件: {},replicas[{}]", subjobStr, replicas);
             migrationSubjobService.fail(subjob.getId(), "replicas副本数是单副本,不满足切换leader条件", FAILED_NO_RETRY);
             throw new MigrationException("replicas副本数是单副本,不满足切换leader条件.");
         }
 
-        logger.info("进行迁移leader change,主题分区组变更: {}", group);
+        logger.info("切换Leader, 主题分区组变更: {}, group[{}]", subjobStr, group);
         int retryCount = 0;
         while (retryCount < changeLeaderMaxRetryCount) {
             Integer newLeader = candidates.get(retryCount % candidates.size());
@@ -302,30 +317,31 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
             int count = topicPartitionGroupService.leaderChange(group);
             if (count <= 0) {
                 retryCount++;
-                logger.error("要更新的replica数据不存在,进行重试第{}次,subjob[{}]", retryCount, subjob);
+                logger.error("要更新的replica数据不存在,进行重试第{}次: {}", retryCount, subjobStr);
             } else {
                 long startTime = SystemClock.now();
                 while (SystemClock.now() - startTime < nsrUpdateCheckTimeout) {
+                    try {
+                        Thread.sleep(nsrUpdateCheckInterval);
+                    } catch (InterruptedException e) {
+                        logger.error("sleep1 失败");
+                    }
+
                     group = topicPartitionGroupService.findByTopicAndGroup(subjob.getNamespaceCode(),
                             subjob.getTopicCode(), subjob.getPgNo());
                     if (subjob.getSrcBrokerId() != group.getLeader()) {
                         return true;
                     }
-                    try {
-                        Thread.sleep(nsrUpdateCheckInterval);
-                    } catch (InterruptedException e) {
-                        logger.error("切Leader sleep 失败");
-                    }
                 }
                 retryCount++;
-                logger.error("要更新的replica数据不存在,进行重试第{}次,subjob[{}]", retryCount, subjob);
+                logger.error("要更新的replica数据不存在,进行重试第{}次: {}", retryCount, subjobStr);
             }
         }
         return false;
     }
 
     private void removeReplica(MigrationSubjob subjob) throws Exception {
-        logger.info("Replica delete: {}", subjob);
+        logger.info("摘除副本: {}", subjob.toString());
         String deleteId = subjob.getTopicCode() + DOT + subjob.getPgNo() + DOT + subjob.getSrcBrokerId();
         PartitionGroupReplica replica = replicaService.findById(deleteId);
         replicaService.removeWithNameservice(replica, topicPartitionGroupService.findByTopicAndGroup(
@@ -333,6 +349,7 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
     }
 
     private void addReplica(MigrationSubjob subjob) {
+        logger.info("添加副本: {}", subjob.toString());
         TopicPartitionGroup group = topicPartitionGroupService.findByTopicAndGroup(subjob.getNamespaceCode(),
                 subjob.getTopicCode(), subjob.getPgNo());
         // 已经存在，不再添加
@@ -359,15 +376,20 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
     private long getLeaderPosition(MigrationSubjob subjob) throws Exception {
         List<PartitionGroupPosition> partitionGroupPositions = brokerMonitorService.findPartitionGroupMetric(
                 subjob.getNamespaceCode(), subjob.getTopicCode(), subjob.getPgNo());
-        return partitionGroupPositions.stream().filter(pg -> pg.isLeader()).findFirst().get().getRightPosition();
+        Optional<PartitionGroupPosition> optional = partitionGroupPositions.stream().filter(PartitionGroupPosition::isLeader).findFirst();
+        if (optional.isPresent()) {
+            return optional.get().getRightPosition();
+        }
+        return -1L;
     }
 
     private boolean checkReplicationPosition(MigrationSubjob subjob, long leaderStartPosition) throws Exception {
-        logger.info("Check replica position, subjob: {}", subjob);
+        logger.info("监听复制同步: {}", subjob.toString());
         List<PartitionGroupPosition> partitionGroupPositions = brokerMonitorService.findPartitionGroupMetric(
                 subjob.getNamespaceCode(), subjob.getTopicCode(), subjob.getPgNo());
-        if (partitionGroupPositions.stream().filter(pg -> Integer.parseInt(pg.getBrokerId().split("_")[0]) == subjob.getTgtBrokerId())
-                .findFirst().get().getRightPosition() >= leaderStartPosition) {
+        Optional<PartitionGroupPosition> optional = partitionGroupPositions.stream().filter(pg ->
+                Integer.parseInt(pg.getBrokerId().split("_")[0]) == subjob.getTgtBrokerId()).findFirst();
+        if (optional.isPresent() && optional.get().getRightPosition() >= leaderStartPosition) {
             return true;
         }
         return false;
