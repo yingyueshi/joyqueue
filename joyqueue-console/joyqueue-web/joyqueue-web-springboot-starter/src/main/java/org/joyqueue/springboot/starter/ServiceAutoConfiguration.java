@@ -33,7 +33,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         "org.joyqueue.service.impl",
         "org.joyqueue.util",
         "org.joyqueue.async",
-        "org.joyqueue.other",})
+        "org.joyqueue.other",
+        "org.joyqueue.schedule",})
 @MapperScan(basePackages = {"org.joyqueue.repository"})
 @EnableTransactionManagement
 @EnableAspectJAutoProxy(exposeProxy = true)

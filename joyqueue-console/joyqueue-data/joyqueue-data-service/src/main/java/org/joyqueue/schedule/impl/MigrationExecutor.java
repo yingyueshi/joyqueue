@@ -1,4 +1,4 @@
-package org.joyqueue.service.impl;
+package org.joyqueue.schedule.impl;
 
 import org.joyqueue.domain.TopicName;
 import org.joyqueue.exception.MigrationException;
@@ -15,8 +15,10 @@ import org.joyqueue.util.LocalSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import java.util.*;
@@ -28,10 +30,11 @@ import static org.joyqueue.model.domain.migration.MigrationSubjob.FAILED_NO_RETR
 import static org.joyqueue.model.domain.migration.MigrationSubjob.SUCCESSED;
 import static org.joyqueue.model.domain.migration.MigrationTask.NEW;
 
-@Service("migrationExecutorService")
-public class MigrationExecutorServiceImpl implements MigrationExecutorService {
+@Component
+@ConditionalOnProperty(value="migration.enable", havingValue = "true")
+public class MigrationExecutor {
 
-    private final Logger logger = LoggerFactory.getLogger(MigrationExecutorServiceImpl.class);
+    private final Logger logger = LoggerFactory.getLogger(MigrationExecutor.class);
 
     @Autowired
     private MigrationSubjobService migrationSubjobService;
@@ -43,6 +46,9 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
     private PartitionGroupReplicaService replicaService;
     @Autowired
     private BrokerMonitorService brokerMonitorService;
+
+    @Value("${migration.enable:false}")
+    private Boolean migrationEnable;
 
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private static final String DOT = ".";
@@ -76,6 +82,9 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
 
     @Scheduled(fixedDelay = 5 * 1000)
     private void dispatchTask() {
+        if (migrationEnable == null || !migrationEnable) {
+            return;
+        }
         // 因重启等，导致RUNNING状态却不在执行自动任务中，回滚
         String localIp = IpUtil.getLocalIp();
         List<MigrationSubjob> runnings = migrationSubjobService.findByExecutor(localIp, MigrationSubjob.RUNNING);
@@ -141,6 +150,10 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
 
     @Scheduled(fixedDelay = 2 * 1000)
     private void executorTask() {
+        if (migrationEnable == null || !migrationEnable) {
+            return;
+        }
+
         List<MigrationSubjob> waitExecutes = migrationSubjobService.findByExecutor(IpUtil.getLocalIp(), MigrationSubjob.DISPATCHED);
         List<MigrationSubjob> fails = migrationSubjobService.findByExecutor(IpUtil.getLocalIp(), MigrationSubjob.FAILED_RETRY);
         waitExecutes.addAll(fails);
@@ -155,6 +168,10 @@ public class MigrationExecutorServiceImpl implements MigrationExecutorService {
 
     @Scheduled(fixedDelay = 5 * 1000)
     private void updateTaskStatus() {
+        if (migrationEnable == null || !migrationEnable) {
+            return;
+        }
+
         migrationTaskService.findByQuery(new ListQuery<>(new QMigrationTask())).stream().forEach(task -> {
             List<MigrationSubjob> subjobs = migrationSubjobService.findByMigrationId(task.getId());
             int size = subjobs.size();
