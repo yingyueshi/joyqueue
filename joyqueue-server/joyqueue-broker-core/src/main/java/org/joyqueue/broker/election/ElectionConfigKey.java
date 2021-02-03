@@ -30,8 +30,9 @@ public enum ElectionConfigKey implements PropertyDef {
     EXECUTOR_THREAD_NUM_MAX("election.executor.thread.num.max", 50, Type.INT),
     TIMER_SCHEDULE_THREAD_NUM("election.timer.schedule.thread.num", 10, Type.INT),
     HEARTBEAT_TIMEOUT("election.heartbeat.timeout", 1000, Type.INT),
+    HEARTBEAT_MAX_TIMEOUT("election.heartbeat.max.timeout", 1000 * 30, Type.INT),
     SEND_COMMAND_TIMEOUT("election.send.command.timeout", 1000 * 5, Type.INT),
-    MAX_BATCH_REPLICATE_SIZE("election.max.replicate.length", 1024 * 1024, Type.INT),
+    MAX_BATCH_REPLICATE_SIZE("election.max.replicate.length", 1024 * 1024 * 3, Type.INT),
     DISABLE_STORE_TIMEOUT("election.disable.store.timeout", 1000 * 5, Type.INT),
     LISTEN_PORT("election.listen.port", 18001, Type.INT),
     TRANSFER_LEADER_TIMEOUT("election.transfer.leader.timeout", 1000 * 10, Type.INT),
@@ -43,9 +44,19 @@ public enum ElectionConfigKey implements PropertyDef {
     TRANSFER_LEADER_MIN_LAG("election.transfer.leader.min.lag", 10 * 1024 * 1024L, Type.LONG),
     ENABLE_REBALANCE_LEADER("election.enable.rebalance.leader", false, Type.BOOLEAN),
     MIN_REBALANCE_INTERVAL("election.min.rebalance.interval", 60 * 60 * 1000, Type.INT),
-    ENABLE_REPORT_LEADER_PERIODICALLY("election.enable.report.leader.periodically", false, Type.BOOLEAN),
+    ENABLE_REPORT_LEADER_PERIODICALLY("election.enable.report.leader.periodically", true, Type.BOOLEAN),
     ENABLE_REPORT_LEADER_PERIODICALLY_FORCE("election.enable.report.leader.periodically.force", false, Type.BOOLEAN),
-    OUTPUT_CONSUME_POS("election.consume.pos.output", false, Type.BOOLEAN);
+    ENABLE_ONLINE_NODE_PERIODICALLY("election.enable.onlineNode.periodically", true, Type.BOOLEAN),
+    OUTPUT_CONSUME_POS("election.consume.pos.output", false, Type.BOOLEAN),
+    CONNECTION_TIMEOUT("election.connection.timeout", 100 * 1, Type.INT),
+    CONNECTION_RETRY_DELAY("election.connection.retryDelay", 1000 * 10, Type.INT),
+    ENABLE_SHARED_HEARTBEAT("election.enable.shared.heartbeat", false, Type.BOOLEAN),
+    ENABLE_REPLICATE_HEARTBEAT("election.enable.replicate.heartbeat", false, Type.BOOLEAN),
+    ENABLE_CHECK_FLUSH_ERROR("election.enable.check.flush.error", false, Type.BOOLEAN),
+    FLUSH_ERROR_THRESHOLD("election.flush.error.threshold", 100, Type.LONG),
+    ENABLE_CHECK_DUPLICATE_COMMAND("election.enable.check.duplicate.command", false, Type.BOOLEAN),
+    ENABLE_V3_COMMAND("election.enable.v3.command", true, Type.BOOLEAN),
+    ;
 
     private String name;
     private Object value;

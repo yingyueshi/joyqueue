@@ -59,6 +59,7 @@ public class NsrConsumerConverter extends Converter<Consumer, org.joyqueue.domai
                     .paused(consumer.getConfig().isPaused())
                     .retry(consumer.getConfig().isRetry())
                     .filters(consumer.getConfig().getFilters())
+                    .region(consumer.getConfig().getRegion())
                     .create());
             nsrConsumer.setRetryPolicy(RetryPolicy.Builder.build()
                     .maxRetrys(consumer.getConfig().getMaxRetrys())
@@ -98,15 +99,18 @@ public class NsrConsumerConverter extends Converter<Consumer, org.joyqueue.domai
             consumerConfig.setBlackList(StringUtils.join(consumerPolicy.getBlackList(), ","));
             consumerConfig.setAckTimeout(consumerPolicy.getAckTimeout());
             consumerConfig.setArchive(consumerPolicy.getArchive());
-            consumerConfig.setBatchSize(consumerPolicy.getBatchSize());
+            if (consumerPolicy.getBatchSize() != null) {
+                consumerConfig.setBatchSize(Integer.parseInt(consumerPolicy.getBatchSize().toString()));
+            }
             consumerConfig.setConcurrent(consumerPolicy.getConcurrent());
             consumerConfig.setDelay(consumerPolicy.getDelay());
             consumerConfig.setPaused(consumerPolicy.getPaused());
             consumerConfig.setRetry(consumerPolicy.getRetry());
+            consumerConfig.setRegion(consumerPolicy.getRegion());
             Map<String,String> map = consumerPolicy.getFilters();
             if (map !=null) {
                 List<String> filterList = map.entrySet().stream().map(entry -> (entry.getKey() + ":" + entry.getValue())).collect(Collectors.toList());
-                consumerConfig.setFilters(StringUtils.join(filterList, ","));
+                consumerConfig.setFilters(StringUtils.join(filterList, ";"));
             }
         }
 
@@ -123,8 +127,8 @@ public class NsrConsumerConverter extends Converter<Consumer, org.joyqueue.domai
 
         org.joyqueue.domain.Consumer.ConsumerLimitPolicy limitPolicy = nsrConsumer.getLimitPolicy();
         if (limitPolicy != null) {
-            consumerConfig.setLimitTps(limitPolicy.getTps());
-            consumerConfig.setLimitTraffic(limitPolicy.getTraffic());
+            consumerConfig.setLimitTps(limitPolicy.getTps() == null? 0 : limitPolicy.getTps());
+            consumerConfig.setLimitTraffic(limitPolicy.getTraffic() == null ? 0 : limitPolicy.getTraffic());
         }
         consumer.setConfig(consumerConfig);
 

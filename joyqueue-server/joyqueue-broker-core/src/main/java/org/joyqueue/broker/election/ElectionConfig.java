@@ -81,6 +81,10 @@ public class ElectionConfig {
         return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.HEARTBEAT_TIMEOUT);
     }
 
+    public int getHeartbeatMaxTimeout() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.HEARTBEAT_MAX_TIMEOUT);
+    }
+
     public int getSendCommandTimeout() {
         return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.SEND_COMMAND_TIMEOUT);
     }
@@ -141,8 +145,44 @@ public class ElectionConfig {
         return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_REPORT_LEADER_PERIODICALLY_FORCE);
     }
 
+    public boolean enableOnlineNodePeriodically() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_ONLINE_NODE_PERIODICALLY);
+    }
+
     public boolean getOutputConsumePos() {
         return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.OUTPUT_CONSUME_POS);
+    }
+
+    public int getConnectionTimeout() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.CONNECTION_TIMEOUT);
+    }
+
+    public int getConnectionRetryDelay() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.CONNECTION_RETRY_DELAY);
+    }
+
+    public boolean enableSharedHeartbeat() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_SHARED_HEARTBEAT);
+    }
+
+    public boolean enableReplicateHeartbeat() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_REPLICATE_HEARTBEAT);
+    }
+
+    public boolean enableCheckFlushError() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_CHECK_FLUSH_ERROR);
+    }
+
+    public long getFlushErrorThreshold() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.FLUSH_ERROR_THRESHOLD);
+    }
+
+    public boolean enableCheckDuplicateCommand() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_CHECK_DUPLICATE_COMMAND);
+    }
+
+    public boolean enableV3Command() {
+        return PropertySupplier.getValue(propertySupplier, ElectionConfigKey.ENABLE_V3_COMMAND);
     }
 
     public void setListenPort(String port) {

@@ -28,7 +28,7 @@ public class ProducerConfig extends BaseNsrModel {
     /**
      * 是否就近发送
      **/
-    private boolean nearBy;
+    private Boolean nearBy = false;
 
     /**
      * 集群实例发送权重
@@ -38,18 +38,25 @@ public class ProducerConfig extends BaseNsrModel {
     /**
      * 是否归档
      */
-    private boolean archive;
+    private Boolean archive = false;
 
     /**
      * 单个发送者
      **/
-    private boolean single = false;
+    private Boolean single = false;
 
     private String blackList;
 
-    private int limitTps;
+    private Integer limitTps = 0;
 
-    private int limitTraffic;
+    private Integer limitTraffic = 0;
+
+    private Integer timeout = 2000;
+
+    private Integer qosLevel;
+    private String region;
+
+    private Map<String, String> params;
 
     public String getProducerId() {
         return producerId;
@@ -59,11 +66,11 @@ public class ProducerConfig extends BaseNsrModel {
         this.producerId = producerId;
     }
 
-    public boolean isNearBy() {
+    public Boolean isNearBy() {
         return nearBy;
     }
 
-    public void setNearBy(boolean nearBy) {
+    public void setNearBy(Boolean nearBy) {
         this.nearBy = nearBy;
     }
 
@@ -75,19 +82,19 @@ public class ProducerConfig extends BaseNsrModel {
         this.weight = weight;
     }
 
-    public boolean isSingle() {
+    public Boolean isSingle() {
         return single;
     }
 
-    public void setSingle(boolean single) {
+    public void setSingle(Boolean single) {
         this.single = single;
     }
 
-    public boolean isArchive() {
+    public Boolean isArchive() {
         return archive;
     }
 
-    public void setArchive(boolean archive) {
+    public void setArchive(Boolean archive) {
         this.archive = archive;
     }
 
@@ -99,20 +106,52 @@ public class ProducerConfig extends BaseNsrModel {
         this.blackList = blackList;
     }
 
-    public void setLimitTps(int limitTps) {
+    public void setLimitTps(Integer limitTps) {
         this.limitTps = limitTps;
     }
 
-    public int getLimitTps() {
+    public Integer getLimitTps() {
         return limitTps;
     }
 
-    public void setLimitTraffic(int limitTraffic) {
+    public void setLimitTraffic(Integer limitTraffic) {
         this.limitTraffic = limitTraffic;
     }
 
-    public int getLimitTraffic() {
+    public Integer getLimitTraffic() {
         return limitTraffic;
+    }
+
+    public Integer getTimeout() {
+        return timeout;
+    }
+
+    public void setTimeout(Integer timeout) {
+        this.timeout = timeout;
+    }
+
+    public Map<String, String> getParams() {
+        return params;
+    }
+
+    public void setParams(Map<String, String> params) {
+        this.params = params;
+    }
+
+    public Integer getQosLevel() {
+        return qosLevel;
+    }
+
+    public void setQosLevel(Integer qosLevel) {
+        this.qosLevel = qosLevel;
+    }
+
+    public String getRegion() {
+        return region;
+    }
+
+    public void setRegion(String region) {
+        this.region = region;
     }
 
     /**

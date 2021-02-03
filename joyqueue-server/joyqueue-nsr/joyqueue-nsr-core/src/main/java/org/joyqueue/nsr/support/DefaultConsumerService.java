@@ -21,6 +21,7 @@ import org.joyqueue.domain.Broker;
 import org.joyqueue.domain.Consumer;
 import org.joyqueue.domain.PartitionGroup;
 import org.joyqueue.domain.TopicName;
+import org.joyqueue.nsr.config.NameServiceConfig;
 import org.joyqueue.nsr.event.AddConsumerEvent;
 import org.joyqueue.nsr.event.RemoveConsumerEvent;
 import org.joyqueue.nsr.event.UpdateConsumerEvent;
@@ -53,16 +54,18 @@ public class DefaultConsumerService implements ConsumerService {
     private BrokerInternalService brokerInternalService;
     private ConsumerInternalService consumerInternalService;
     private TransactionInternalService transactionInternalService;
+    private NameServiceConfig config;
     private Messenger messenger;
 
     public DefaultConsumerService(TopicInternalService topicInternalService, PartitionGroupInternalService partitionGroupInternalService,
                                   BrokerInternalService brokerInternalService, ConsumerInternalService consumerInternalService,
-                                  TransactionInternalService transactionInternalService, Messenger messenger) {
+                                  TransactionInternalService transactionInternalService, NameServiceConfig config, Messenger messenger) {
         this.topicInternalService = topicInternalService;
         this.partitionGroupInternalService = partitionGroupInternalService;
         this.brokerInternalService = brokerInternalService;
         this.consumerInternalService = consumerInternalService;
         this.transactionInternalService = transactionInternalService;
+        this.config = config;
         this.messenger = messenger;
     }
 
@@ -94,7 +97,7 @@ public class DefaultConsumerService implements ConsumerService {
     @Override
     public Consumer add(Consumer consumer) {
         if (topicInternalService.getTopicByCode(consumer.getTopic().getNamespace(), consumer.getTopic().getCode()) == null) {
-            throw new NsrException(String.format("topic: %s is not exist", consumer.getTopic()));
+            throw new NsrException(String.format("topic: %s does not exist", consumer.getTopic()));
         }
         if (consumerInternalService.getByTopicAndApp(consumer.getTopic(), consumer.getApp()) != null) {
             throw new NsrException(String.format("consumer: %s,%s is exist", consumer.getTopic(), consumer.getApp()));
@@ -121,7 +124,9 @@ public class DefaultConsumerService implements ConsumerService {
             throw new NsrException(e);
         }
 
-        messenger.publish(new AddConsumerEvent(consumer.getTopic(), consumer), replicas);
+        if (config.getMessengerPublishSubscriptionEnable()) {
+            messenger.publish(new AddConsumerEvent(consumer.getTopic(), consumer), replicas);
+        }
         return consumer;
     }
 
@@ -129,7 +134,7 @@ public class DefaultConsumerService implements ConsumerService {
     public Consumer update(Consumer consumer) {
         Consumer oldConsumer = consumerInternalService.getByTopicAndApp(consumer.getTopic(), consumer.getApp());
         if (oldConsumer == null) {
-            throw new NsrException(String.format("topic: %s, consumer: %s is not exist", oldConsumer.getTopic(), oldConsumer.getApp()));
+            throw new NsrException(String.format("topic: %s, consumer: %s does not exist", oldConsumer.getTopic(), oldConsumer.getApp()));
         }
 
         logger.info("updateConsumer, topic: {}, app: {}", consumer.getTopic(), consumer.getApp());
@@ -153,7 +158,9 @@ public class DefaultConsumerService implements ConsumerService {
             throw new NsrException(e);
         }
 
-        messenger.publish(new UpdateConsumerEvent(consumer.getTopic(), oldConsumer, consumer), replicas);
+        if (config.getMessengerPublishSubscriptionEnable()) {
+            messenger.publish(new UpdateConsumerEvent(consumer.getTopic(), oldConsumer, consumer), replicas);
+        }
         return consumer;
     }
 
@@ -161,7 +168,7 @@ public class DefaultConsumerService implements ConsumerService {
     public void delete(String id) {
         Consumer consumer = consumerInternalService.getById(id);
         if (consumer == null) {
-            throw new NsrException(String.format("consumer: %s is not exist", id));
+            throw new NsrException(String.format("consumer: %s does not exist", id));
         }
 
         logger.info("deleteConsumer, topic: {}, app: {}", consumer.getTopic(), consumer.getApp());
@@ -185,7 +192,9 @@ public class DefaultConsumerService implements ConsumerService {
             throw new NsrException(e);
         }
 
-        messenger.publish(new RemoveConsumerEvent(consumer.getTopic(), consumer), replicas);
+        if (config.getMessengerPublishSubscriptionEnable()) {
+            messenger.publish(new RemoveConsumerEvent(consumer.getTopic(), consumer), replicas);
+        }
     }
 
     protected List<Broker> getReplicas(List<PartitionGroup> partitionGroups) {

@@ -16,9 +16,15 @@
 package org.joyqueue.broker.kafka.handler;
 
 import com.alibaba.fastjson.JSON;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.MapUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.joyqueue.broker.cluster.ClusterNameService;
 import org.joyqueue.broker.kafka.KafkaCommandType;
 import org.joyqueue.broker.kafka.KafkaContext;
 import org.joyqueue.broker.kafka.KafkaContextAware;
@@ -37,13 +43,9 @@ import org.joyqueue.domain.TopicConfig;
 import org.joyqueue.domain.TopicName;
 import org.joyqueue.network.transport.Transport;
 import org.joyqueue.network.transport.command.Command;
-import org.joyqueue.nsr.NameService;
 import org.joyqueue.toolkit.delay.AbstractDelayedOperation;
 import org.joyqueue.toolkit.delay.DelayedOperationKey;
 import org.joyqueue.toolkit.delay.DelayedOperationManager;
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.collections.MapUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +53,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * TopicMetadataRequestHandler
@@ -62,14 +67,19 @@ public class TopicMetadataRequestHandler extends AbstractKafkaCommandHandler imp
 
     protected static final Logger logger = LoggerFactory.getLogger(TopicMetadataRequestHandler.class);
 
-    private NameService nameService;
     private KafkaConfig config;
+    private ClusterNameService clusterNameService;
     private DelayedOperationManager delayPurgatory;
+
+    private Cache<String, Map<String, TopicConfig>> appCache;
 
     @Override
     public void setKafkaContext(KafkaContext kafkaContext) {
-        this.nameService = kafkaContext.getBrokerContext().getNameService();
         this.config = kafkaContext.getConfig();
+        this.clusterNameService = kafkaContext.getBrokerContext().getClusterNameService();
+        this.appCache = CacheBuilder.newBuilder()
+                .expireAfterWrite(config.getMetadataCacheExpireTime(), TimeUnit.MILLISECONDS)
+                .build();
         this.delayPurgatory = new DelayedOperationManager("kafka-metadata-delayed");
         this.delayPurgatory.start();
     }
@@ -79,9 +89,11 @@ public class TopicMetadataRequestHandler extends AbstractKafkaCommandHandler imp
         TopicMetadataRequest topicMetadataRequest = (TopicMetadataRequest) command.getPayload();
         String clientId = KafkaClientHelper.parseClient(topicMetadataRequest.getClientId());
 
-        Map<String, TopicConfig> topicConfigs = null;
+        Map<String, TopicConfig> topicConfigs = Collections.emptyMap();
         if (CollectionUtils.isEmpty(topicMetadataRequest.getTopics()) && StringUtils.isNotBlank(clientId)) {
-            topicConfigs = getAllTopicConfigs(clientId);
+            if (config.getMetadataFuzzySearchEnable() && KafkaClientHelper.isMetadataFuzzySearch(topicMetadataRequest.getClientId())) {
+                topicConfigs = getAllTopicConfigs(clientId);
+            }
         } else {
             topicConfigs = getTopicConfigs(topicMetadataRequest.getTopics());
         }
@@ -98,8 +110,10 @@ public class TopicMetadataRequestHandler extends AbstractKafkaCommandHandler imp
         }
 
         if (CollectionUtils.isEmpty(topicMetadata) && config.getMetadataDelayEnable()) {
-            logger.info("get topic metadata, topics: {}, address: {}, metadata: {}, app: {}",
-                    topicMetadataRequest.getTopics(), transport.remoteAddress(), JSON.toJSONString(topicMetadata), topicMetadataRequest.getClientId());
+            if (logger.isDebugEnabled()) {
+                logger.debug("get topic metadata, topics: {}, address: {}, metadata: {}, app: {}",
+                        topicMetadataRequest.getTopics(), transport.remoteAddress(), JSON.toJSONString(topicMetadata), topicMetadataRequest.getClientId());
+            }
 
             delayPurgatory.tryCompleteElseWatch(new AbstractDelayedOperation(config.getMetadataDelay()) {
                 @Override
@@ -119,10 +133,28 @@ public class TopicMetadataRequestHandler extends AbstractKafkaCommandHandler imp
     }
 
     protected Map<String, TopicConfig> getAllTopicConfigs(String clientId) {
+        if (config.getMetadataCacheEnable()) {
+            try {
+                return appCache.get(clientId, new Callable<Map<String, TopicConfig>>() {
+                    @Override
+                    public Map<String, TopicConfig> call() throws Exception {
+                        return doGetAllTopicConfigs(clientId);
+                    }
+                });
+            } catch (ExecutionException e) {
+                logger.error("getAllTopicConfigs exception, clientId: {}", clientId, e);
+                return Collections.emptyMap();
+            }
+        } else {
+            return doGetAllTopicConfigs(clientId);
+        }
+    }
+
+    protected Map<String, TopicConfig> doGetAllTopicConfigs(String clientId) {
         // TODO 常量
         String[] appGroup = clientId.split("\\.");
-        Map<TopicName, TopicConfig> consumers = nameService.getTopicConfigByApp(clientId, Subscription.Type.CONSUMPTION);
-        Map<TopicName, TopicConfig> producers = nameService.getTopicConfigByApp(appGroup[0], Subscription.Type.PRODUCTION);
+        Map<TopicName, TopicConfig> consumers = clusterNameService.getTopicConfigByApp(clientId, Subscription.Type.CONSUMPTION);
+        Map<TopicName, TopicConfig> producers = clusterNameService.getTopicConfigByApp(appGroup[0], Subscription.Type.PRODUCTION);
 
         Map<String, TopicConfig> result = Maps.newHashMap();
 
@@ -141,14 +173,7 @@ public class TopicMetadataRequestHandler extends AbstractKafkaCommandHandler imp
     }
 
     protected Map<String, TopicConfig> getTopicConfigs(List<String> topics) {
-        Map<String, TopicConfig> result = Maps.newHashMap();
-        for (String topic : topics) {
-            TopicConfig topicConfig = nameService.getTopicConfig(TopicName.parse(topic));
-            if (topicConfig != null) {
-                result.put(topic, topicConfig);
-            }
-        }
-        return result;
+        return clusterNameService.getTopicConfigs(topics);
     }
 
     protected List<KafkaBroker> getTopicBrokers(Map<String, TopicConfig> topicConfigs) {

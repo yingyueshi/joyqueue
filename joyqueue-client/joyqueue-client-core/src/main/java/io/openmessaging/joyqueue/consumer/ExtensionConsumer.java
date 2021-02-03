@@ -16,6 +16,7 @@
 package io.openmessaging.joyqueue.consumer;
 
 import io.openmessaging.consumer.Consumer;
+import io.openmessaging.consumer.MessageReceipt;
 import io.openmessaging.message.Message;
 
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.List;
  */
 public interface ExtensionConsumer extends Consumer {
 
+    // receive
     Message receive(short partition, long timeout);
 
     List<Message> batchReceive(short partition, long timeout);
@@ -36,5 +38,20 @@ public interface ExtensionConsumer extends Consumer {
 
     List<Message> batchReceive(short partition, long index, long timeout);
 
+    // ack
+    void batchAck(List<MessageReceipt> receiptList);
+
+    // commit
+    void commitIndex(short partition, long index);
+
+    void commitMaxIndex(short partition);
+
+    void commitMaxIndex();
+
+    void commitMinIndex(short partition);
+
+    void commitMinIndex();
+
+    // index
     ConsumerIndex getIndex(short partition);
 }

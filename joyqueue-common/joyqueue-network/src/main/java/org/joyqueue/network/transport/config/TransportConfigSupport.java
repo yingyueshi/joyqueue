@@ -96,10 +96,16 @@ public class TransportConfigSupport {
                     transportConfig.setCallbackThreads(property.getInteger());
                 } else if (fullKey.equals(keyPrefix + TRANSPORT_CALL_NON_BLOCK_ONEWAY)) {
                     transportConfig.setNonBlockOneway(property.getBoolean());
+                } else if (fullKey.equals(keyPrefix + TRANSPORT_CALL_NON_BLOCK_ASYNC)) {
+                    transportConfig.setNonBlockAsync(property.getBoolean());
                 } else if (fullKey.equals(keyPrefix + TRANSPORT_SEND_TIMEOUT)) {
                     transportConfig.setSendTimeout(property.getInteger());
                 } else if (fullKey.equals(keyPrefix + TRANSPORT_RETRY_DELAY)) {
                     transportConfig.getRetryPolicy().setRetryDelay(property.getInteger());
+                } else if (fullKey.equals(keyPrefix + TRANSPORT_RETRY_MAX)) {
+                    transportConfig.getRetryPolicy().setMaxRetrys(property.getInteger());
+                } else if (fullKey.equals(keyPrefix + TRANSPORT_CLEAR_INTERVAL)) {
+                    transportConfig.setClearInterval(property.getInteger());
                 }
             }
 
@@ -125,8 +131,11 @@ public class TransportConfigSupport {
     public static final String TRANSPORT_MAX_ASYNC = "transport.maxAsync";
     public static final String TRANSPORT_CALL_BACK_THREADS = "transport.callbackThreads";
     public static final String TRANSPORT_CALL_NON_BLOCK_ONEWAY = "transport.nonBlockOneway";
+    public static final String TRANSPORT_CALL_NON_BLOCK_ASYNC = "transport.nonBlockAsync";
     public static final String TRANSPORT_SEND_TIMEOUT = "transport.sendTimeout";
     public static final String TRANSPORT_RETRY_DELAY = "transport.retryDelay";
+    public static final String TRANSPORT_RETRY_MAX = "transport.retryMax";
+    public static final String TRANSPORT_CLEAR_INTERVAL = "transport.clearInterval";
 
     //server transport config
     public static final String TRANSPORT_SERVER_PORT = "transport.server.port";

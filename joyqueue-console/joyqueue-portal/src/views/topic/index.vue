@@ -1,33 +1,48 @@
 <template>
   <div>
-    <div class="ml20 mt30">
-      <d-select v-model="searchData.type" placeholder="请选择类型" class="left mr5"
-                style="width:213px" @on-change="getList">
-        <span slot="prepend">主题类型</span>
-        <d-option value="-1" >全部</d-option>
-        <d-option value="0" >普通主题</d-option>
-        <d-option value="1" >广播主题</d-option>
-        <d-option value="2" >顺序主题</d-option>
-      </d-select>
-      <d-input v-model="searchData.keyword" placeholder="请输入英文名" class="left mr5"
-               style="width:213px" @on-enter="getList">
-        <span slot="prepend">关键词</span>
-      </d-input>
-      <d-button type="primary" color="success" @click="getList">查询<icon name="search" style="margin-left: 5px;"></icon></d-button>
-      <d-button v-if="$store.getters.isAdmin" type="primary" class="left ml10" @click="openDialog('addDialog')">添加主题<icon name="plus-circle" style="margin-left: 5px;"></icon></d-button>
-    </div>
+    <grid-row class="table-query">
+      <grid-col span="3" style="padding-right: 10px;">
+        <d-select v-model="searchData.type" placeholder="请选择类型"
+                   @on-change="getList">
+          <span slot="prepend">主题类型</span>
+          <d-option value="-1" >全部</d-option>
+          <d-option value="0" >普通主题</d-option>
+          <d-option value="1" >广播主题</d-option>
+          <d-option value="2" >顺序主题</d-option>
+        </d-select>
+      </grid-col>
+      <grid-col span="4">
+        <d-input v-model="searchData.keyword" placeholder="请输入英文名"
+                 oninput="value = value.trim()"
+                @on-enter="getList">
+          <d-button type="borderless" slot="suffix" @click="getList"><icon name="search" size="14" color="#CACACA" ></icon></d-button>
+        </d-input>
+      </grid-col>
+      <grid-col span="4" offset="13">
+        <d-button v-if="$store.getters.isAdmin" type="primary" class="right" @click="openDialog('addDialog')">添加主题<icon name="plus-circle" style="margin-left: 5px;"></icon></d-button>
+      </grid-col>
+    </grid-row>
+
     <my-table :data="tableData" :showPin="showTablePin" :page="page" @on-size-change="handleSizeChange"
               @on-current-change="handleCurrentChange" @on-selection-change="handleSelectionChange" @on-view-detail="goDetail"
-              @on-add-brokerGroup="addBrokerGroup" @on-del="del">
+              @on-add-brokerGroup="addBrokerGroup" @on-del="del" @on-policy="handlePolicy" :operation-column-width="operationColumnWidth">
     </my-table>
     <!--添加-->
-    <my-dialog :dialog="addDialog" class="add-dialog" @on-dialog-cancel="dialogCancel('addDialog')" :styles="{top: '40px'}">
+    <my-dialog :dialog="addDialog" class="add-dialog maxDialogHeight" @on-dialog-cancel="dialogCancel('addDialog')" :styles="{top: '40px'}">
       <topic-form @on-dialog-cancel="dialogCancel('addDialog')" :type="$store.getters.addFormType"
                   :addBrokerUrls="addBrokerUrls" :addBrokerColData="addBrokerColData"/>
     </my-dialog>
     <!--添加分组-->
     <my-dialog :dialog="addBrokerGroupDialog" @on-dialog-confirm="addBrokerGroupConfirm()" @on-dialog-cancel="addBrokerGroupCancel()">
       <add-broker-group :data="addBrokerGroupData" @on-choosed-brokerGroup="choosedBrokerGroup"></add-broker-group>
+    </my-dialog>
+
+    <my-dialog :dialog="policyDialog" @on-dialog-confirm="policyConfirm" @on-dialog-cancel="dialogCancel('policyDialog')">
+      <d-form ref="policyMetadata" label-width="200px">
+        <d-form-item v-for="item in policies" :key="item.key" :label="item.key + ':'">
+          <d-input v-model="item.value" style="width: 250px;"/>
+        </d-form-item>
+      </d-form>
     </my-dialog>
   </div>
 </template>
@@ -39,7 +54,7 @@ import myDialog from '../../components/common/myDialog.vue'
 import addBrokerGroup from './addBrokerGroup.vue'
 import topicForm from './topicForm.vue'
 import crud from '../../mixins/crud.js'
-import {basePrimaryBtnRender} from '../../utils/common.js'
+import {basePrimaryBtnRender, sortByTopic} from '../../utils/common.js'
 
 export default {
   name: 'topic',
@@ -56,13 +71,18 @@ export default {
       default () {
         return [
           {
+            txt: '策略',
+            method: 'on-policy',
+            isAdmin: true
+          },
+          {
             txt: '详情',
             method: 'on-view-detail'
           },
           {
             txt: '删除',
             method: 'on-del',
-            isAdmin: true
+            isAdmin: 1
           }
         ]
       }
@@ -81,22 +101,30 @@ export default {
         return [
           {
             title: 'Broker分组',
-            key: 'group.code'
+            key: 'group.code',
+            width: '20%'
           },
           {
             title: 'ID',
-            key: 'id'
+            key: 'id',
+            width: '20%'
           },
           {
             title: 'IP',
-            key: 'ip'
+            key: 'ip',
+            width: '20%'
           },
           {
             title: '端口',
-            key: 'port'
+            key: 'port',
+            width: '20%'
           }
         ]
       }
+    },
+    operationColumnWidth: {
+      type: Number,
+      default: 140
     }
   },
   data () {
@@ -105,16 +133,16 @@ export default {
         keyword: '',
         command: 1
       },
+      topic: {},
+      policy: {},
+      policies: [],
       tableData: {
         rowData: [],
         colData: [
           {
-            title: 'ID',
-            key: 'id'
-          },
-          {
             title: '英文名',
             key: 'code',
+            width: 200,
             render: (h, params) => {
               return h('label', {
                 style: {
@@ -133,11 +161,13 @@ export default {
           },
           {
             title: '命名空间',
+            width: 200,
             key: 'namespace.code'
           },
           {
             title: '类型',
             key: 'type',
+            width: 80,
             render: (h, params) => {
               return basePrimaryBtnRender(h, params.item.type, [
                 {
@@ -159,23 +189,8 @@ export default {
             }
           },
           {
-            title: '队列数',
+            title: '分区数',
             key: 'partitions'
-          },
-          {
-            title: '归档',
-            key: 'archive',
-            render: (h, params) => {
-              let txt = !params.item.archive ? '已关闭' : '已开启'
-              let color = !params.item.archive ? 'warning' : 'success'
-              return h('DButton', {
-                props: {
-                  size: 'small',
-                  borderless: true,
-                  color: color
-                }
-              }, txt)
-            }
           }
         ],
         btns: this.btns
@@ -185,6 +200,12 @@ export default {
         title: '添加主题',
         width: 800,
         showFooter: false
+      },
+      policyDialog: {
+        visible: false,
+        title: '策略详情',
+        width: '500',
+        showFooter: true
       },
       addData: {},
       addBrokerGroupDialog: {
@@ -203,6 +224,9 @@ export default {
       this.$router.push({name: `/${this.$i18n.locale}/topic/detail`,
         query: { id: item.id, topic: item.code, namespace: item.namespace.code }})
     },
+    sortData (data) {
+      return data.sort((a, b) => sortByTopic(a, b))
+    },
     addBrokerGroup (item) {
       this.openDialog('addBrokerGroupDialog')
       this.addBrokerGroupData = item
@@ -218,14 +242,67 @@ export default {
         this.getList()
       })
     },
+    policyConfirm () {
+      this.topic.policy = {}
+      for (let policy in this.policies) {
+        if (this.policies.hasOwnProperty(policy)) {
+          if (this.policies[policy].key === 'storeMaxTime') {
+            if (this.policies[policy].value) {
+              this.topic.policy[this.policies[policy].key] = this.policies[policy].value * (1000 * 60 * 60)
+            } else {
+              this.topic.policy[this.policies[policy].key] = undefined
+            }
+          } else {
+            this.topic.policy[this.policies[policy].key] = this.policies[policy].value
+          }
+        }
+      }
+      apiRequest.put(this.urlOrigin.edit + '/' + encodeURIComponent(this.topic.id), {}, this.topic).then((data) => {
+        this.policyDialog.visible = false
+        if (data.code === 200) {
+          this.$Message.info('更新成功')
+        }
+        this.getList()
+        this.policies = undefined
+      })
+    },
     addBrokerGroupCancel () {
       this.addBrokerGroupDialog.visible = false
     },
     choosedBrokerGroup (val) {
       this.addBrokerGroupData.brokerGroupsAdd = val
     },
+    handlePolicy (item) {
+      this.topic = item
+      this.policies = []
+      if (!this.topic.policy) {
+        this.topic.policy = {}
+      }
+      this.policies.push({
+        key: 'storeMaxTime',
+        txt: '存储最长时间(h)',
+        value: item.policy.storeMaxTime !== undefined ? item.policy.storeMaxTime / (1000 * 60 * 60) : undefined
+      })
+      this.policies.push({
+        key: 'storeCleanKeepUnconsumed',
+        txt: '保留未消费数据',
+        value: item.policy.storeCleanKeepUnconsumed
+      })
+      for (let policy in this.policy) {
+        this.policies.push({
+          key: policy,
+          value: this.policy[policy]
+        })
+      }
+      this.policyDialog.visible = true
+    },
     isAdmin (item) {
       return this.$store.getters.isAdmin
+    },
+    dialogCancel (dialogName) {
+      this[dialogName].visible = false
+      this.policies = undefined
+      this.getList()
     },
     // 删除
     del (item, index) {
@@ -260,6 +337,11 @@ export default {
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
 .label{text-align: right; line-height: 32px;}
+.table-query {
+  width: 99%;
+  margin-top: 20px;
+  padding-right: 20px;
+  }
 .add-dialog{
   overflow: hidden;
 }
@@ -280,4 +362,7 @@ export default {
 }
 .hint{color: #f00;}
 .star{color: #f00;}
+.maxDialogHeight /deep/ .dui-dialog__body {
+  height: 650px;
+}
 </style>

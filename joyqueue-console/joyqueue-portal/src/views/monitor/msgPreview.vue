@@ -1,5 +1,11 @@
 <template>
   <div>
+    <grid-row>
+      <grid-col span="3">消息格式: </grid-col>
+      <grid-col span="21">
+        <d-radio v-for="(supportedMessageType, index) in messageTypes" :key="index" :value="messageType" name="messageTypeRadio" :label="supportedMessageType"  @on-change="$emit('update:messageType', $event)">{{supportedMessageType}}</d-radio>
+      </grid-col>
+    </grid-row>
     <my-table :data="tableData" :showPin="showTablePin" style="height: 400px;overflow-y:auto" :showPagination=false
               :page="page" @on-size-change="handleSizeChange"  @on-current-change="handleCurrentChange"/>
     <label >共 {{page.total}} 条记录</label>
@@ -22,6 +28,13 @@ export default {
     //   type: Boolean,
     //   default: false
     // },
+    messageTypes: {
+      type: Array,
+      default: [
+        'UTF8 TEXT'
+      ]
+    }, // 支持的消息格式
+    messageType: String,
     app: {
       id: 0,
       code: ''
@@ -90,7 +103,7 @@ export default {
   data () {
     return {
       urls: {
-        previewMessage: '/monitor/preview/message'
+        previewMessage: '/monitor/preview/message',
       },
       tableData: {
         rowData: [],
@@ -99,6 +112,11 @@ export default {
       page: {
         total: 0
       }
+    }
+  },
+  watch: {
+    messageType: function () {
+      this.getList()
     }
   },
   methods: {
@@ -120,8 +138,8 @@ export default {
         subscribeGroup: this.subscribeGroup || '',
         type: this.type
       }
-
-      apiRequest.postBase(this.urls.previewMessage, {}, data, false).then((data) => {
+      let params = '?messageDecodeType=' + this.messageType
+      apiRequest.postBase(this.urls.previewMessage+params, {}, data, false).then((data) => {
         data.data = data.data || []
         this.tableData.rowData = data.data
         this.page.total = this.tableData.rowData.length
@@ -129,17 +147,6 @@ export default {
       })
     }
   },
-  // watch: {
-  //   doSearch: {
-  //     handler (curVal, oldVal) {
-  //       if (curVal) {
-  //         this.getList()
-  //         this.doSearch = false
-  //       }
-  //     },
-  //     deep: true
-  //   }
-  // },
   mounted () {
     // this.getList()
   }

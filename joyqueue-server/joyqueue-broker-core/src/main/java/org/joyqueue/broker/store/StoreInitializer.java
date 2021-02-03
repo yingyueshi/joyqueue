@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -90,21 +91,25 @@ public class StoreInitializer extends Service implements EventListener<MetaEvent
         if (CollectionUtils.isEmpty(replicas)) {
             return;
         }
-
+        // 并行恢复所有的PartitionGroup
         ExecutorService executor = Executors.newFixedThreadPool(32, new NamedThreadFactory("Store-recover-threads"));
         try {
             CompletableFuture.allOf(
                     replicas.stream()
                             .map(replica -> CompletableFuture.runAsync(() -> {
-                                PartitionGroup group = clusterManager.getPartitionGroupByGroup(replica.getTopic(),replica.getGroup());
-                                if (group == null) {
-                                    logger.warn("group is null topic {},replica {}", replica.getTopic(), replica.getGroup());
-                                    throw new RuntimeException(String.format("group is null topic %s,replica %s", replica.getTopic(), replica.getGroup()));
+                                try {
+                                    PartitionGroup group = clusterManager.getPartitionGroupByGroup(replica.getTopic(), replica.getGroup());
+                                    if (group == null) {
+                                        logger.warn("group is null topic {},replica {}", replica.getTopic(), replica.getGroup());
+                                        throw new RuntimeException(String.format("group is null topic %s,replica %s", replica.getTopic(), replica.getGroup()));
+                                    }
+                                    if (!group.getReplicas().contains(broker.getId())) {
+                                        return;
+                                    }
+                                    doRestore(group, replica, broker);
+                                } catch (Exception e) {
+                                    throw new CompletionException(e);
                                 }
-                                if (!group.getReplicas().contains(broker.getId())) {
-                                    return;
-                                }
-                                doRestore(group, replica, broker);
                                     }, executor)
                             ).toArray(CompletableFuture[]::new)
             ).get();
@@ -113,8 +118,8 @@ public class StoreInitializer extends Service implements EventListener<MetaEvent
         }
     }
 
-    protected void doRestore(PartitionGroup group, Replica replica, Broker broker) {
-        if (config.getForceRestore()) {
+    protected void doRestore(PartitionGroup group, Replica replica, Broker broker) throws Exception {
+        if (config.getForceRestore()) { // 强制恢复，如果磁盘上没有这个PartitionGroup，则新建一个
             logger.info("force restore topic {}, group.no {} group {}", replica.getTopic().getFullName(), replica.getGroup(), group);
             if (storeService.partitionGroupExists(group.getTopic().getFullName(), group.getGroup())) {
                 storeService.restorePartitionGroup(group.getTopic().getFullName(), group.getGroup());
@@ -283,7 +288,7 @@ public class StoreInitializer extends Service implements EventListener<MetaEvent
         oldReplicas.removeAll(newReplicas);
 
         List<Broker> brokers = Lists.newLinkedList();
-        for (Integer newReplica : newReplicas) {
+        for (Integer newReplica : newPartitionGroup.getReplicas()) {
             brokers.add(nameService.getBroker(newReplica));
         }
 

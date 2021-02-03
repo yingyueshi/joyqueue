@@ -26,18 +26,15 @@ import org.joyqueue.broker.monitor.BrokerMonitor;
 import org.joyqueue.broker.network.support.BrokerTransportClientFactory;
 import org.joyqueue.broker.replication.ReplicaGroup;
 import org.joyqueue.broker.replication.ReplicationManager;
+import org.joyqueue.broker.replication.ReplicationTransportSession;
 import org.joyqueue.domain.Broker;
 import org.joyqueue.domain.PartitionGroup;
 import org.joyqueue.domain.TopicName;
-import org.joyqueue.network.event.TransportEvent;
-import org.joyqueue.network.transport.Transport;
-import org.joyqueue.network.transport.TransportAttribute;
 import org.joyqueue.network.transport.TransportClient;
 import org.joyqueue.network.transport.command.Command;
 import org.joyqueue.network.transport.command.CommandCallback;
 import org.joyqueue.network.transport.config.ClientConfig;
 import org.joyqueue.network.transport.exception.TransportException;
-import org.joyqueue.network.transport.support.DefaultTransportAttribute;
 import org.joyqueue.store.StoreService;
 import org.joyqueue.store.replication.ReplicableStore;
 import org.joyqueue.toolkit.concurrent.EventBus;
@@ -78,11 +75,11 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
     private ClusterManager clusterManager;
 
     // 发送给一个broker的命令使用同一个连接
-    private final Map<String, Transport> sessions = new ConcurrentHashMap<>();
+    private final Map<String, ReplicationTransportSession> sessions = new ConcurrentHashMap<>();
     private ScheduledExecutorService electionTimerExecutor;
     private ExecutorService electionExecutor;
 
-    private EventBus<ElectionEvent> electionEventManager;
+    private EventBus<ElectionEvent> electionEventManager = new EventBus<>("LeaderElectionEvent");
     private ElectionMetadataManager electionMetadataManager;
     private ReplicationManager replicationManager;
 
@@ -151,31 +148,36 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
     public void doStart() throws Exception {
         super.doStart();
 
-        electionEventManager = new EventBus<>("LeaderElectionEvent");
         electionEventManager.start();
         addListener(brokerMonitor.new ElectionListener());
         leaderElections = new ConcurrentHashMap<>();
 
         ClientConfig clientConfig = new ClientConfig();
         clientConfig.setIoThreadName("joyqueue-election-io-eventLoop");
+        clientConfig.setConnectionTimeout(electionConfig.getConnectionTimeout());
+        clientConfig.getRetryPolicy().setRetryDelay(electionConfig.getConnectionRetryDelay());
         transportClient = new BrokerTransportClientFactory().create(clientConfig);
         transportClient.start();
-
-        EventListener<TransportEvent> clientEventListener = new ClientEventListener();
-        transportClient.addListener(clientEventListener);
 
         electionTimerExecutor = Executors.newScheduledThreadPool(electionConfig.getTimerScheduleThreadNum(), new NamedThreadFactory("Election-Timer"));
         electionExecutor = new ThreadPoolExecutor(electionConfig.getExecutorThreadNumMin(), electionConfig.getExecutorThreadNumMax(),
                 60, TimeUnit.SECONDS, new LinkedBlockingDeque<>(electionConfig.getCommandQueueSize()),
                 new NamedThreadFactory("Election-sendCommand"));
 
-        replicationManager = new ReplicationManager(electionConfig, storeService, consume, brokerMonitor);
+        replicationManager = new ReplicationManager(electionConfig, brokerConfig, storeService, consume, brokerMonitor);
         replicationManager.start();
 
 		Thread.sleep(1000);
 
         electionMetadataManager = new ElectionMetadataManager(electionConfig.getMetadataPath());
         electionMetadataManager.recover(this);
+
+        for (Map.Entry<TopicPartitionGroup, ElectionMetadata> entry : electionMetadataManager.getAllElectionMetadata().entrySet()) {
+            TopicPartitionGroup topicPartitionGroup = entry.getKey();
+            ElectionMetadata electionMetadata = entry.getValue();
+            electionEventManager.add(new ElectionEvent(ElectionEvent.Type.START_ELECTION,
+                    electionMetadata.getCurrentTerm(), electionMetadata.getLeaderId(), topicPartitionGroup));
+        }
 
         logger.info("Election manager started.");
     }
@@ -192,6 +194,9 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
             }
         }
         leaderElections.clear();
+        for (Map.Entry<String, ReplicationTransportSession> entry : sessions.entrySet()) {
+            entry.getValue().stop();
+        }
         sessions.clear();
 
         Close.close(electionTimerExecutor);
@@ -235,7 +240,8 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
     public void onNodeAdd(TopicName topic, int partitionGroup, PartitionGroup.ElectType electType, List<Broker> brokers,
                           Set<Integer> learners, Broker broker, int localBroker, int leader) throws ElectionException {
 
-        logger.info("Add node {} to election of topic {}, partition group {}", broker, topic, partitionGroup);
+        logger.info("Add node {} to election of topic {}, partition group {}, learners is {}",
+                broker, topic, partitionGroup, JSON.toJSONString(learners));
 
         LeaderElection leaderElection = getLeaderElection(topic, partitionGroup);
         if (leaderElection == null) {
@@ -256,7 +262,8 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
                 return;
             }
         }
-        leaderElection.addNode(new DefaultElectionNode(broker.getIp() + ":" + broker.getBackEndPort(), broker.getId()));
+        leaderElection.addNode(new DefaultElectionNode(broker.getIp() + ":" + broker.getBackEndPort(), broker.getId()),
+                learners.contains(broker.getId()));
     }
 
     @Override
@@ -508,48 +515,24 @@ public class ElectionManager extends Service implements ElectionService, BrokerC
             return;
         }
 
-        Transport transport = sessions.get(address);
+        ReplicationTransportSession transport = sessions.get(address);
         if (transport == null) {
             synchronized (sessions) {
                 transport = sessions.get(address);
                 if (transport == null) {
                     logger.info("Send election command, create transport of address {}", address);
 
-                    transport = transportClient.createTransport(address);
-                    TransportAttribute attribute = transport.attr();
-                    if (attribute == null) {
-                        attribute = new DefaultTransportAttribute();
-                        transport.attr(attribute);
-                    }
-                    attribute.set("address", address);
+                    transport = new ReplicationTransportSession(address, transportClient);
                     sessions.put(address, transport);
                 }
             }
         }
 
-        transport.async(command, timeout, callback);
+        transport.sendCommand(command, timeout, callback);
     }
 
     @Override
     public void setBrokerContext(BrokerContext brokerContext) {
         this.brokerContext = brokerContext;
-    }
-
-    private class ClientEventListener implements EventListener<TransportEvent> {
-        @Override
-        public void onEvent(TransportEvent event) {
-            switch (event.getType()) {
-                case CONNECT:
-                    break;
-                case EXCEPTION:
-                case CLOSE:
-                    TransportAttribute attribute = event.getTransport().attr();
-                    sessions.remove(attribute.get("address"));
-                    logger.info("Election manager transport of {} closed", (String) attribute.get("address"));
-                    break;
-                default:
-                    break;
-            }
-        }
     }
 }

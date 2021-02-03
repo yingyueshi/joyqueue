@@ -24,7 +24,7 @@
     <d-tabs>
       <d-tab-pane label="Broker" name="name2" icon="file-text">
       <broker ref="broker" :searchData="brokerSearchData" :urls="brokerUrls" :colData="brokerColData"
-              :btns="brokerBtns"></broker>
+              :operates="brokerBtns"></broker>
       </d-tab-pane>
     </d-tabs>
   </div>
@@ -50,11 +50,15 @@ export default {
       },
       brokerSearchData: {
         brokerGroupId: this.$route.query.id,
-        keyword: ''
+        keyword: '',
+        groupVisible: false,
+        group: this.$route.query.code
       },
       brokerUrls: {
         search: `/broker/search`,
-        removeBroker: `/brokerGroup/updateBroker`
+        removeBroker: `/brokerGroup/updateBroker`,
+        startInfo: '/monitor/start',
+        findDetail: '/monitor/broker/findBrokerDetail/'
       },
       brokerBtns: [
         {
@@ -81,35 +85,43 @@ export default {
       brokerColData: [
         {
           title: 'ID',
-          key: 'id'
+          key: 'id',
+          width: '10%'
         },
         {
           title: 'IP',
-          key: 'ip'
+          key: 'ip',
+          width: '10%'
         },
         {
           title: '端口',
-          key: 'port'
+          key: 'port',
+          width: '10%'
         },
         {
           title: '数据中心',
-          key: 'dataCenter.id'
+          key: 'dataCenter.id',
+          width: '10%'
         },
         {
           title: '启动时间',
-          key: 'startupTime'
+          key: 'startupTime',
+          width: '10%'
         },
         {
           title: '重试方式',
-          key: 'retryType'
+          key: 'retryType',
+          width: '10%'
         },
         {
           title: '权限',
-          key: 'permission'
+          key: 'permission',
+          width: '10%'
         },
         {
           title: '描述',
-          key: 'description'
+          key: 'description',
+          width: '10%'
         }
       ]
     }

@@ -1,6 +1,6 @@
 {
-  "name": "joyqueue-web",
-  "version": "1.1.1",
+  "name": "joyqueue-portal",
+  "version": "4.2.1",
   "description": "JoyQueue web administration console",
   "author": "yuanchanglong, chenyanying3",
   "scripts": {
@@ -17,6 +17,7 @@
     "axios": "^0.18.0",
     "deepmerge": "^3.2.0",
     "es6-promise": "^4.2.4",
+    "hotkeys-js": "^3.8.1",
     "js-cookie": "^2.2.0",
     "lodash": "^4.17.10",
     "node-sass": "^4.9.4",

@@ -16,6 +16,7 @@
 package org.joyqueue.broker.replication;
 
 import com.google.common.base.Preconditions;
+import org.joyqueue.broker.config.BrokerConfig;
 import org.joyqueue.broker.consumer.Consume;
 import org.joyqueue.broker.election.DefaultElectionNode;
 import org.joyqueue.broker.election.ElectionConfig;
@@ -35,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,6 +57,7 @@ public class ReplicationManager extends Service {
 
     private ConcurrentHashMap<TopicPartitionGroup, ReplicaGroup> replicaGroups;
     private ElectionConfig electionConfig;
+    private BrokerConfig brokerConfig;
     private final ConcurrentHashMap<String, Transport> sessions = new ConcurrentHashMap<>();
 
     private StoreService storeService;
@@ -65,13 +68,14 @@ public class ReplicationManager extends Service {
     private ScheduledExecutorService replicateTimerExecutor;
     private BlockingDeque replicateQueue;
 
-    public ReplicationManager(ElectionConfig electionConfig, StoreService storeService,
+    public ReplicationManager(ElectionConfig electionConfig, BrokerConfig brokerConfig, StoreService storeService,
                               Consume consume, BrokerMonitor brokerMonitor) {
         Preconditions.checkArgument(electionConfig != null, "election config is null");
         Preconditions.checkArgument(storeService != null, "store service is null");
         Preconditions.checkArgument(consume != null, "consume is null");
 
         this.electionConfig = electionConfig;
+        this.brokerConfig = brokerConfig;
         this.storeService = storeService;
         this.consume = consume;
     }
@@ -84,9 +88,11 @@ public class ReplicationManager extends Service {
 
         ClientConfig clientConfig = new ClientConfig();
         clientConfig.setIoThreadName("joyqueue-Replication-IO-EventLoop");
-        clientConfig.setMaxAsync(100);
+        clientConfig.setMaxAsync(1000);
         clientConfig.setIoThread(32);
         clientConfig.setSocketBufferSize(1024 * 1024 * 1);
+        clientConfig.setConnectionTimeout(300 * 1);
+        clientConfig.getRetryPolicy().setRetryDelay(1000 * 6);
         transportClient = new BrokerTransportClientFactory().create(clientConfig);
         transportClient.start();
 
@@ -104,13 +110,23 @@ public class ReplicationManager extends Service {
                     ConcurrentHashMap<TopicPartitionGroup, ReplicaGroup> replicaGroups = ReplicationManager.this.replicaGroups;
                     int replicaGroupCount = 0;
                     int replicaLeaderCount = 0;
-                    for (ReplicaGroup replicaGroup : replicaGroups.values()) {
+                    for (Map.Entry<TopicPartitionGroup, ReplicaGroup> entry : replicaGroups.entrySet()) {
+                        ReplicaGroup replicaGroup = entry.getValue();
                         replicaGroupCount++;
                         if (replicaGroup.isLeader()) {
                             replicaLeaderCount++;
+                            logger.info("Partition group {} flush error times is {}, session count is {}, " +
+                                    "response queue size is {}",
+                                    entry.getKey(), replicaGroup.getStoreFlushErrorTimes(),
+                                    replicaGroup.getSessionCount(), replicaGroup.getResponseQueueSize());
+                            if (replicaGroup.getStoreFlushErrorTimes() > 0) {
+                                logger.info("Partition group {} have flush error times is {}",
+                                        entry.getKey(), replicaGroup.getStoreFlushErrorTimes());
+                            }
                         }
                     }
-                    logger.info("ReplicationManager, managed replica group count {} ,leader count {} , replicate queue capacity is {}, current size is {}",
+                    logger.info("ReplicationManager, managed replica group count {} ,leader count {} , " +
+                            "replicate queue capacity is {}, current size is {}",
                             replicaGroupCount, replicaLeaderCount, electionConfig.getCommandQueueSize(), replicateQueue.size());
                 } catch (Throwable th) {
                     logger.warn("ReplicateManger schedule error.", th);
@@ -144,8 +160,8 @@ public class ReplicationManager extends Service {
             throw new ElectionException(String.format("Create Replica group for topic %s partition group " +
                     "%d failed, replicable store is null", topic, partitionGroup));
         }
-        replicaGroup = new ReplicaGroup(topicPartitionGroup, this, replicableStore, electionConfig,
-                consume, replicateExecutor, brokerMonitor, allNodes, learners, localReplicaId, leaderId,transportClient);
+        replicaGroup = new ReplicaGroup(topicPartitionGroup, this, replicableStore, electionConfig, brokerConfig,
+                consume, replicateExecutor, brokerMonitor, allNodes, learners, localReplicaId, leaderId, transportClient);
         try {
             replicaGroup.start();
         } catch (Exception e) {

@@ -14,7 +14,6 @@ org.joyqueue.handler.routing.command.topic.PartitionGroupReplicaCommand
 org.joyqueue.handler.routing.command.topic.TopicPartitionGroupCommand
 org.joyqueue.handler.routing.command.monitor.ConsumerCommand
 org.joyqueue.handler.routing.command.monitor.ProducerCommand
-org.joyqueue.handler.routing.command.monitor.ProducerConfigAddOrUpdateCommand
 org.joyqueue.handler.routing.command.monitor.BrokerMonitorCommand
 org.joyqueue.handler.routing.command.log.OperLogCommand
 org.joyqueue.handler.routing.command.retry.RetryCommand
@@ -22,3 +21,6 @@ org.joyqueue.handler.routing.command.chart.GrafanaCommand
 org.joyqueue.handler.routing.command.chart.MetricCommand
 org.joyqueue.handler.routing.command.monitor.ConsumeOffsetCommand
 org.joyqueue.handler.routing.command.archive.ArchiveCommand
+org.joyqueue.handler.routing.command.topic.TopicMsgFilterCommand
+org.joyqueue.handler.routing.command.migration.MigrationTaskCommand
+org.joyqueue.handler.routing.command.migration.MigrationSubjobCommand

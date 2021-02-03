@@ -54,6 +54,14 @@
         WHERE b.id=#{id}
     </select>
 
+    <select id="findByBrokerIds" parameterType="long" resultType="BrokerGroupRelated">
+        <include refid="select"/>
+        WHERE b.id in
+        <foreach collection="brokerIds" item="id" index="i" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
     <select id="findByIds" resultType="BrokerGroupRelated">
         <include refid="select"/>
         WHERE b.id IN
@@ -64,7 +72,7 @@
 
     <sql id="queryCondition">
         <trim prefix="where" prefixOverrides="and | or">
-            <if test="null!=query and query.keyword!=null and query.keyword!=''">(b.ip LIKE CONCAT('%',#{query.keyword},'%') OR b.group_code LIKE CONCAT('%',#{query.keyword},'%')) AND </if>
+            <if test="null!=query and query.keyword!=null and query.keyword!=''">(b.id LIKE CONCAT('%',#{query.keyword},'%') OR b.group_code LIKE CONCAT('%',#{query.keyword},'%')) AND </if>
             <if test="null!=query and query.brokerGroupId==-1"> (b.group_id = -1 or b.group_id is null or b.group_id = '') AND </if>
             <if test="null!=query and query.brokerGroupId!=-1 and query.brokerGroupId !=0"> b.group_id = #{query.brokerGroupId} AND </if>
             <if test="null!=query and null!=query.group and query.group.id > 0"> b.group_id = #{query.group.id} AND </if>

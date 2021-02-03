@@ -19,6 +19,7 @@ import com.alibaba.fastjson.JSON;
 import com.google.common.collect.Maps;
 import org.joyqueue.broker.BrokerContext;
 import org.joyqueue.broker.BrokerContextAware;
+import org.joyqueue.broker.cluster.ClusterNameService;
 import org.joyqueue.broker.config.BrokerConfig;
 import org.joyqueue.broker.helper.SessionHelper;
 import org.joyqueue.broker.protocol.JoyQueueCommandHandler;
@@ -45,7 +46,6 @@ import org.joyqueue.network.session.Connection;
 import org.joyqueue.network.transport.Transport;
 import org.joyqueue.network.transport.command.Command;
 import org.joyqueue.network.transport.command.Type;
-import org.joyqueue.nsr.NameService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,13 +63,13 @@ public class FetchClusterRequestHandler implements JoyQueueCommandHandler, Type,
     protected static final Logger logger = LoggerFactory.getLogger(FetchClusterRequestHandler.class);
 
     private BrokerConfig brokerConfig;
-    private NameService nameService;
+    private ClusterNameService clusterNameService;
     private BrokerContext brokerContext;
 
     @Override
     public void setBrokerContext(BrokerContext brokerContext) {
         this.brokerConfig = brokerContext.getBrokerConfig();
-        this.nameService = brokerContext.getNameService();
+        this.clusterNameService = brokerContext.getClusterNameService();
         this.brokerContext = brokerContext;
     }
 
@@ -79,7 +79,7 @@ public class FetchClusterRequestHandler implements JoyQueueCommandHandler, Type,
         Connection connection = SessionHelper.getConnection(transport);
 
         if (connection == null || !connection.isAuthorized(fetchClusterRequest.getApp())) {
-            logger.warn("connection is not exists, transport: {}, app: {}", transport, fetchClusterRequest.getApp());
+            logger.warn("connection does not exist, transport: {}, app: {}", transport, fetchClusterRequest.getApp());
             return BooleanAck.build(JoyQueueCode.FW_CONNECTION_NOT_EXISTS.getCode());
         }
 
@@ -105,7 +105,7 @@ public class FetchClusterRequestHandler implements JoyQueueCommandHandler, Type,
 
     protected Topic getTopicMetadata(Connection connection, String topic, String app, Map<Integer, BrokerNode> brokers) {
         TopicName topicName = TopicName.parse(topic);
-        TopicConfig topicConfig = nameService.getTopicConfig(topicName);
+        TopicConfig topicConfig = clusterNameService.getTopicConfig(topicName);
 
         Topic result = new Topic();
         result.setTopic(topic);
@@ -117,8 +117,8 @@ public class FetchClusterRequestHandler implements JoyQueueCommandHandler, Type,
             return result;
         }
 
-        Producer producer = nameService.getProducerByTopicAndApp(topicName, app);
-        Consumer consumer = nameService.getConsumerByTopicAndApp(topicName, app);
+        Producer producer = clusterNameService.getNameService().getProducerByTopicAndApp(topicName, app);
+        Consumer consumer = clusterNameService.getNameService().getConsumerByTopicAndApp(topicName, app);
 
         if (producer == null && consumer == null && !connection.isSystem()) {
             logger.warn("topic policy not exist, topic: {}, app: {}", topic, app);
@@ -127,7 +127,9 @@ public class FetchClusterRequestHandler implements JoyQueueCommandHandler, Type,
         }
 
         if (producer == null) {
-            result.setProducerPolicy(PolicyConverter.convertProducer(brokerContext.getProducerPolicy()));
+            if (connection.isSystem()) {
+                result.setProducerPolicy(PolicyConverter.convertProducer(brokerContext.getProducerPolicy()));
+            }
         } else {
             if (producer.getProducerPolicy() == null) {
                 result.setProducerPolicy(PolicyConverter.convertProducer(brokerContext.getProducerPolicy()));
@@ -137,8 +139,10 @@ public class FetchClusterRequestHandler implements JoyQueueCommandHandler, Type,
         }
 
         if (consumer == null) {
-            result.setConsumerPolicy(PolicyConverter.convertConsumer(brokerContext.getConsumerPolicy()));
-            result.setType(TopicType.TOPIC);
+            if (connection.isSystem()) {
+                result.setConsumerPolicy(PolicyConverter.convertConsumer(brokerContext.getConsumerPolicy()));
+                result.setType(TopicType.TOPIC);
+            }
         } else {
             if (consumer.getConsumerPolicy() == null) {
                 result.setConsumerPolicy(PolicyConverter.convertConsumer(brokerContext.getConsumerPolicy()));
@@ -169,7 +173,7 @@ public class FetchClusterRequestHandler implements JoyQueueCommandHandler, Type,
 
         Broker leaderBroker = partitionGroup.getLeaderBroker();
         if (leaderBroker != null) {
-            DataCenter brokerDataCenter = nameService.getDataCenter(leaderBroker.getIp());
+            DataCenter brokerDataCenter = clusterNameService.getNameService().getDataCenter(leaderBroker.getIp());
             brokers.put(partitionGroup.getLeader(), BrokerNodeConverter.convertBrokerNode(leaderBroker, brokerDataCenter, connection.getRegion()));
         }
 

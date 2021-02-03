@@ -15,6 +15,7 @@
  */
 package org.joyqueue.handler.routing.command.monitor;
 
+import com.alibaba.fastjson.JSONObject;
 import com.google.common.collect.Lists;
 import com.jd.laf.binding.annotation.Value;
 import com.jd.laf.web.vertx.annotation.Body;
@@ -22,29 +23,34 @@ import com.jd.laf.web.vertx.annotation.Path;
 import com.jd.laf.web.vertx.annotation.QueryParam;
 import com.jd.laf.web.vertx.response.Response;
 import com.jd.laf.web.vertx.response.Responses;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.joyqueue.handler.Constants;
 import org.joyqueue.handler.annotation.PageQuery;
 import org.joyqueue.handler.error.ConfigException;
 import org.joyqueue.handler.error.ErrorCode;
 import org.joyqueue.handler.routing.command.NsrCommandSupport;
-import org.joyqueue.handler.Constants;
-import org.joyqueue.model.PageResult;
 import org.joyqueue.model.Pagination;
 import org.joyqueue.model.QPageQuery;
 import org.joyqueue.model.domain.Consumer;
 import org.joyqueue.model.domain.ConsumerConfig;
+import org.joyqueue.model.domain.User;
 import org.joyqueue.model.query.QConsumer;
 import org.joyqueue.nsr.ConsumerNameServerService;
 import org.joyqueue.service.ApplicationService;
+import org.joyqueue.service.ApplicationUserService;
 import org.joyqueue.service.ConsumerService;
 import org.joyqueue.service.TopicService;
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.joyqueue.handler.Constants.ID;
+import static org.joyqueue.handler.routing.command.monitor.ProducerCommand.CAN_OPERATE_PROPERTY;
 
 
 public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService, QConsumer> {
@@ -55,16 +61,23 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
     private TopicService topicService;
     @Value(nullable = false)
     private ConsumerNameServerService consumerNameServerService;
+    @Value(nullable = false)
+    private ApplicationUserService applicationUserService;
 
     @Path("search")
     public Response pageQuery(@PageQuery QPageQuery<QConsumer> qPageQuery) throws Exception {
         QConsumer query = qPageQuery.getQuery();
-        List<Consumer> consumers = Collections.emptyList();
+        List<Consumer> consumers = new ArrayList<>(0);
 
-        if (query.getApp() != null) {
+        boolean appFlag = true;
+
+        if (query.getApp() != null && query.getTopic() ==null) {
             consumers = service.findByApp(query.getApp().getCode());
-        } else if (query.getTopic() != null) {
+        } else if (query.getTopic() != null && query.getApp() == null) {
+            appFlag = false;
             consumers = service.findByTopic(query.getTopic().getCode(), query.getTopic().getNamespace().getCode());
+        } else if (query.getApp() !=null && query.getTopic()!=null) {
+            consumers.add(service.findByTopicAppGroup(query.getTopic().getNamespace().getCode(),query.getTopic().getCode(),query.getApp().getCode(),null));
         }
 
         if (CollectionUtils.isNotEmpty(consumers) && qPageQuery.getQuery() != null && StringUtils.isNotBlank(qPageQuery.getQuery().getKeyword())) {
@@ -72,8 +85,26 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
             Iterator<Consumer> iterator = consumers.iterator();
             while (iterator.hasNext()) {
                 Consumer consumer = iterator.next();
-                if (!consumer.getTopic().getCode().equals(qPageQuery.getQuery().getKeyword())) {
-                    iterator.remove();
+                if (appFlag) {
+                    if (!consumer.getTopic().getCode().contains(qPageQuery.getQuery().getKeyword())) {
+                        iterator.remove();
+                    }
+                } else {
+                    if (!consumer.getApp().getCode().contains(qPageQuery.getQuery().getKeyword())) {
+                        iterator.remove();
+                    }
+                }
+            }
+        }
+
+        if (appFlag) {
+            if (CollectionUtils.isNotEmpty(consumers) && session.getRole() != User.UserRole.ADMIN.value()) {
+                Iterator<Consumer> iterator = consumers.iterator();
+                while (iterator.hasNext()) {
+                    Consumer consumer = iterator.next();
+                    if (applicationUserService.findByUserApp(session.getCode(), consumer.getApp().getCode().split("\\.")[0]) == null) {
+                        iterator.remove();
+                    }
                 }
             }
         }
@@ -81,10 +112,17 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
         Pagination pagination = qPageQuery.getPagination();
         pagination.setTotalRecord(consumers.size());
 
-        PageResult<Consumer> result = new PageResult();
-        result.setPagination(pagination);
-        result.setResult(consumers);
-        return Responses.success(result.getPagination(), result.getResult());
+        // 给producer添加是否可以操作属性
+        return Responses.success(pagination, consumers.stream().map(consumer -> {
+            JSONObject obj = (JSONObject) JSONObject.toJSON(consumer);
+            if (session.getRole() == User.UserRole.ADMIN.value() ||
+                    applicationUserService.findByUserApp(session.getCode(), consumer.getApp().getCode().split("\\.")[0]) != null) {
+                obj.put(CAN_OPERATE_PROPERTY, true);
+            } else {
+                obj.put(CAN_OPERATE_PROPERTY, false);
+            }
+            return obj;
+        }).collect(Collectors.toList()));
     }
 
     @Path("add")
@@ -99,7 +137,7 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
 
     @Override
     @Path("delete")
-    public Response delete(@QueryParam(Constants.ID) String id) throws Exception {
+    public Response delete(@QueryParam(ID) String id) throws Exception {
         Consumer consumer = service.findById(id);
         int count = service.delete(consumer);
         if (count <= 0) {
@@ -107,6 +145,20 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
         }
         //afterDelete(model);
         return Responses.success();
+    }
+
+    @Path("queryByTopic")
+    public Response queryByTopic(@Body QConsumer qConsumer) throws Exception {
+        if (qConsumer.getTopic() == null || qConsumer.getTopic().getCode() == null) {
+            return Responses.error(Response.HTTP_BAD_REQUEST, "Empty topic!");
+        }
+        String namespace = null;
+        String topic = qConsumer.getTopic().getCode();
+        if (null != qConsumer.getTopic().getNamespace()) {
+            namespace = qConsumer.getTopic().getNamespace().getCode();
+        }
+        List<Consumer> consumers = service.findByTopic(topic, namespace);
+        return Responses.success(consumers);
     }
 
     @Path("configAddOrUpdate")
@@ -118,7 +170,6 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
         }
         return Responses.success();
     }
-
 
     /**
      * 同步producer
@@ -193,4 +244,37 @@ public class ConsumerCommand extends NsrCommandSupport<Consumer, ConsumerService
         return Responses.success(service.findAppsByTopic(topic));
     }
 
+    @Path("checkRegion")
+    public Response checkRegion(@QueryParam("app") String app,
+                                @QueryParam("subscribeGroup") String subscribeGroup,
+                                @QueryParam("region") String region) throws Exception {
+        if (StringUtils.isNotBlank(app) && StringUtils.isNotBlank(region)) {
+            List<Consumer> consumers = consumerNameServerService.findByApp(app);
+            if (StringUtils.isNotBlank(subscribeGroup)) {
+                consumers = consumers.stream().filter(consumer -> subscribeGroup.equals(consumer.getSubscribeGroup()))
+                        .collect(Collectors.toList());
+            }
+            consumers = consumers.stream().filter(consumer -> consumer.getConfig() != null
+                    && StringUtils.isNotBlank(consumer.getConfig().getRegion())
+                    && !region.equals(consumer.getConfig().getRegion()))
+                    .collect(Collectors.toList());
+            return Responses.success(consumers.size() == 0);
+
+        }
+        return Responses.error(500, "app, region can't be empty");
+    }
+
+    @Path("updateRegion")
+    public Response updateRegion(@QueryParam("consumerId") String consumerId,
+                                @QueryParam("region") String region) throws Exception {
+        if (StringUtils.isNotBlank(consumerId)) {
+            Consumer consumer = service.findById(consumerId);
+            String app = consumer.getApp().getCode();
+            String subscribeGroup = consumer.getSubscribeGroup();
+            service.updateAllConsumerRegion(app, subscribeGroup, region);
+            return Responses.success();
+
+        }
+        return Responses.error(500, "consumerId can't be empty");
+    }
 }

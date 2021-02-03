@@ -73,8 +73,8 @@ public abstract class LeaderElection extends Service {
      * 选举集群增加节点
      * @param node 增加的节点
      */
-    public void addNode(DefaultElectionNode node) throws ElectionException{
-        replicaGroup.addNode(node);
+    public void addNode(DefaultElectionNode node, boolean isLearner) throws ElectionException{
+        replicaGroup.addNode(node, isLearner);
     }
 
     /**
@@ -137,4 +137,7 @@ public abstract class LeaderElection extends Service {
 
 	public void stepDown(int term){}
 
+    public int getLocalNodeId() {
+        return localNodeId;
+    }
 }

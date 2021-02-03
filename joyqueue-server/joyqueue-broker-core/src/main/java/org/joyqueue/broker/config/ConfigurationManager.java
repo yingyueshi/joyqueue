@@ -16,21 +16,18 @@
 package org.joyqueue.broker.config;
 
 import com.google.common.base.Preconditions;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.joyqueue.domain.Config;
-import org.joyqueue.event.ConfigEvent;
 import org.joyqueue.event.EventType;
 import org.joyqueue.event.NameServerEvent;
 import org.joyqueue.nsr.event.AddConfigEvent;
 import org.joyqueue.nsr.event.RemoveConfigEvent;
 import org.joyqueue.nsr.event.UpdateConfigEvent;
-import org.joyqueue.toolkit.concurrent.EventBus;
 import org.joyqueue.toolkit.concurrent.EventListener;
 import org.joyqueue.toolkit.config.Property;
-import org.joyqueue.toolkit.lang.Close;
 import org.joyqueue.toolkit.network.IpUtil;
 import org.joyqueue.toolkit.service.Service;
-import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,11 +50,10 @@ public class ConfigurationManager extends Service implements EventListener<NameS
     private static final String DEFAULT_CONFIG_PATH = "joyqueue.properties";
     private static final String GROUP_SPLITTER = ",";
     private static final String ALL_GROUP = "all";
+    private static final String OVERRIDE_GROUP = "override";
 
     private static final Logger logger = LoggerFactory.getLogger(ConfigurationManager.class);
     private ConfigProvider configProvider;
-    // 事件派发器
-    private EventBus<ConfigEvent> eventManager = new EventBus<ConfigEvent>("ContextManager");
 
     private Configuration configuration;
     private String configPath = DEFAULT_CONFIG_PATH;
@@ -131,7 +127,6 @@ public class ConfigurationManager extends Service implements EventListener<NameS
     @Override
     protected void doStart() throws Exception {
         super.doStart();
-        eventManager.start();
         //加载动态配置
         doUpdateConfig();
         logger.info("context manager is started");
@@ -140,7 +135,6 @@ public class ConfigurationManager extends Service implements EventListener<NameS
     @Override
     protected void doStop() {
         super.doStop();
-        Close.close(eventManager);
         logger.info("configuration manager is stopped");
     }
 
@@ -165,17 +159,37 @@ public class ConfigurationManager extends Service implements EventListener<NameS
         }
         for (Config config : configs) {
             logger.info("received config [{}], corresponding property is [{}]", config,configuration.getProperty(config.getKey()) != null ? configuration.getProperty(config.getKey()) : "null");
+            boolean isLocal = ArrayUtils.contains(StringUtils.splitByWholeSeparator(config.getGroup(), GROUP_SPLITTER), IpUtil.getLocalIp());
+
             // 如果group为空或group包含自身ip配置才生效
-            if (StringUtils.isBlank(config.getGroup())
-                    || ALL_GROUP.equals(config.getGroup())
-                    || ArrayUtils.contains(config.getGroup().split(GROUP_SPLITTER), IpUtil.getLocalIp())) {
+            if (ALL_GROUP.equals(config.getGroup())
+                    || OVERRIDE_GROUP.equals(config.getGroup())
+                    || isLocal) {
+
+                if (ALL_GROUP.equals(config.getGroup())) {
+                    Property property = configuration.getProperty(config.getKey());
+                    if (property != null) {
+                        if (property.getPriority() > config.getPriority()) {
+                            logger.info("config {} priority not match, value is {}, group is {}, ", config.getKey(), config.getValue(), config.getGroup());
+                            continue;
+                        }
+                    }
+                }
 
                 if (type.equals(EventType.REMOVE_CONFIG)) {
                     logger.info("delete config {}", config.getKey());
-                    configuration.addProperty(config.getKey(), null);
+                    if (OVERRIDE_GROUP.equals(config.getGroup()) && configuration.getProperty(config.getKey()) != null) {
+                        configuration.addProperty(config.getKey(), null, config.getGroup(), DEFAULT_CONFIGURATION_PRIORITY);
+                    } else {
+                        configuration.addProperty(config.getKey(), null, config.getGroup());
+                    }
                 } else {
                     logger.info("add config {}, value is {}", config.getKey(), config.getValue());
-                    configuration.addProperty(config.getKey(), config.getValue());
+                    if (OVERRIDE_GROUP.equals(config.getGroup()) && configuration.getProperty(config.getKey()) != null) {
+                        configuration.addProperty(config.getKey(), config.getValue(), config.getGroup(), DEFAULT_CONFIGURATION_PRIORITY);
+                    } else {
+                        configuration.addProperty(config.getKey(), config.getValue(), config.getGroup());
+                    }
                 }
             } else {
                 logger.info("config {} group not match, value is {}, group is {}, ", config.getKey(), config.getValue(), config.getGroup());

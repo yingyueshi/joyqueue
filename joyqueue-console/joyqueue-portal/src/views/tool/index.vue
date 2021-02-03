@@ -5,6 +5,12 @@
         <d-menu-item name="operateHistory" icon="target" :size="iconSize" :to="`/${ curLang }/tool/operateHistory`">
           <span class="layout-text">{{ langConfig.operateHistory }}</span>
         </d-menu-item>
+        <d-menu-item name="msgFilter" icon="filter" :size="iconSize" :to="`/${ curLang }/tool/msgFilter`">
+          <span class="layout-text">{{ langConfig.msgFilter }}</span>
+        </d-menu-item>
+        <d-menu-item name="brokerMigration" icon="target" :size="iconSize" :to="`/${ curLang }/tool/brokerMigration`"><!--color="#F5B7B1"-->
+          <span class="layout-text">{{ langConfig.brokerMigration }}</span>
+        </d-menu-item>
       </d-menu>
     </layout-sider>
     <layout-content>

@@ -16,6 +16,8 @@
 package org.joyqueue.broker.protocol.handler;
 
 import com.google.common.collect.Maps;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.joyqueue.broker.cluster.ClusterManager;
 import org.joyqueue.broker.consumer.Consume;
 import org.joyqueue.broker.consumer.model.PullResult;
@@ -27,6 +29,7 @@ import org.joyqueue.broker.polling.LongPollingManager;
 import org.joyqueue.broker.protocol.JoyQueueCommandHandler;
 import org.joyqueue.broker.protocol.JoyQueueContext;
 import org.joyqueue.broker.protocol.JoyQueueContextAware;
+import org.joyqueue.broker.protocol.command.FetchTopicMessageRequest;
 import org.joyqueue.broker.protocol.command.FetchTopicMessageResponse;
 import org.joyqueue.broker.protocol.converter.CheckResultConverter;
 import org.joyqueue.domain.TopicName;
@@ -35,16 +38,14 @@ import org.joyqueue.exception.JoyQueueException;
 import org.joyqueue.network.command.BooleanAck;
 import org.joyqueue.network.command.FetchTopicMessageAckData;
 import org.joyqueue.network.command.FetchTopicMessageData;
-import org.joyqueue.network.command.FetchTopicMessageRequest;
 import org.joyqueue.network.command.JoyQueueCommandType;
+import org.joyqueue.network.protocol.annotation.FetchHandler;
 import org.joyqueue.network.session.Connection;
 import org.joyqueue.network.session.Consumer;
 import org.joyqueue.network.transport.Transport;
 import org.joyqueue.network.transport.command.Command;
 import org.joyqueue.network.transport.command.Type;
 import org.joyqueue.response.BooleanResponse;
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +58,7 @@ import java.util.Map;
  * author: gaohaoxiang
  * date: 2018/12/7
  */
+@FetchHandler
 public class FetchTopicMessageRequestHandler implements JoyQueueCommandHandler, Type, JoyQueueContextAware {
 
     protected static final Logger logger = LoggerFactory.getLogger(FetchTopicMessageRequestHandler.class);
@@ -80,7 +82,7 @@ public class FetchTopicMessageRequestHandler implements JoyQueueCommandHandler, 
         Connection connection = SessionHelper.getConnection(transport);
 
         if (connection == null || !connection.isAuthorized(fetchTopicMessageRequest.getApp())) {
-            logger.warn("connection is not exists, transport: {}, app: {}, topics: {}", transport, fetchTopicMessageRequest.getApp(), fetchTopicMessageRequest.getTopics().keySet());
+            logger.warn("connection does not exist, transport: {}, app: {}, topics: {}", transport, fetchTopicMessageRequest.getApp(), fetchTopicMessageRequest.getTopics().keySet());
             return BooleanAck.build(JoyQueueCode.FW_CONNECTION_NOT_EXISTS.getCode());
         }
 
@@ -94,7 +96,11 @@ public class FetchTopicMessageRequestHandler implements JoyQueueCommandHandler, 
             if (!checkResult.isSuccess()) {
                 logger.warn("checkReadable failed, transport: {}, topic: {}, app: {}, code: {}", transport, topic, fetchTopicMessageRequest.getApp(), checkResult.getJoyQueueCode());
                 result.put(topic, new FetchTopicMessageAckData(CheckResultConverter.convertFetchCode(command.getHeader().getVersion(), checkResult.getJoyQueueCode())));
-                traffic.record(topic, 0);
+                continue;
+            }
+
+            if (fetchTopicMessageRequest.getTraffic().isLimited(topic)) {
+                result.put(topic, new FetchTopicMessageAckData(JoyQueueCode.SUCCESS));
                 continue;
             }
 
@@ -102,7 +108,7 @@ public class FetchTopicMessageRequestHandler implements JoyQueueCommandHandler, 
             Consumer consumer = (StringUtils.isBlank(consumerId) ? null : sessionManager.getConsumerById(consumerId));
 
             if (consumer == null) {
-                logger.warn("connection is not exists, transport: {}, app: {}, topics: {}", transport, fetchTopicMessageRequest.getApp(), fetchTopicMessageRequest.getTopics().keySet());
+                logger.warn("connection does not exist, transport: {}, app: {}, topics: {}", transport, fetchTopicMessageRequest.getApp(), fetchTopicMessageRequest.getTopics().keySet());
                 result.put(topic, new FetchTopicMessageAckData(CheckResultConverter.convertFetchCode(command.getHeader().getVersion(), JoyQueueCode.FW_CONSUMER_NOT_EXISTS)));
                 continue;
             }
@@ -117,7 +123,7 @@ public class FetchTopicMessageRequestHandler implements JoyQueueCommandHandler, 
                 }
             }
 
-            traffic.record(topic, fetchTopicMessageAckData.getSize());
+            traffic.record(topic, fetchTopicMessageAckData.getTraffic(), fetchTopicMessageAckData.getSize());
             result.put(topic, fetchTopicMessageAckData);
         }
 

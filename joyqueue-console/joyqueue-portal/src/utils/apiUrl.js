@@ -1,12 +1,12 @@
 // url统一存放
 export default {
   userInfo: '/login/user', // 用户信息
-  logout: '/logout', // 用户信息
+  logout: '/user/logout', // 用户信息
   '/application': {
     search: '/application/search',
     add: '/application/add',
     del: '/application/delete',
-    getByCode: '/application/getByCode/'
+    getByCode: '/application/getByCode'
   },
   '/application/detail': {
     detail: '/application/get'
@@ -25,7 +25,8 @@ export default {
   '/setting/user': {
     search: '/user/search',
     add: '/user/add',
-    edit: '/user/update'
+    edit: '/user/update',
+    del: '/user/delete'
   },
   '/setting/dataCenter': {
     search: '/dataCenter/search',
@@ -82,8 +83,21 @@ export default {
   '/tool/operateHistory': {
     search: '/operLog/search'
   },
+  '/tool/brokerMigration': {
+    search: `/migration/search`,
+    searchBroker: '/broker/search',
+    searchTopic: '/topic/findByBroker',
+    analysis: '/migration/analysis',
+    add: '/migration/add',
+    detail: '/migrationSubjob/getByMigrationId'
+  },
   common: {
-    findSubscribeGroup: `/consumer/findAllSubscribeGroups`
+    findSubscribeGroup: `/consumer/findAllSubscribeGroups`,
+    updateConsumer: `/consumer/update`,
+    updateProducer: `/producer/update`
+  },
+  monitor: {
+    redirectUrl: `/grafana/getRedirectUrl`
   }
 
 }

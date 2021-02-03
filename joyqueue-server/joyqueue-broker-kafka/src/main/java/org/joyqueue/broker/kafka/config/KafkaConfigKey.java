@@ -37,7 +37,7 @@ public enum KafkaConfigKey implements PropertyDef {
     REBALANCE_TIMEOUT("kafka.rebalance.timeout", 1000 * 60, Type.INT),
 
     // offset同步超时
-    OFFSET_SYNC_TIMEOUT("kafka.offset.sync.timeout", 1000 * 3, Type.INT),
+    OFFSET_SYNC_TIMEOUT("kafka.offset.sync.timeout", 1000 * 1, Type.INT),
 
     // 事务同步超时
     TRANSACTION_SYNC_TIMEOUT("kafka.transaction.sync.timeout", 1000 * 3, Type.INT),
@@ -58,7 +58,10 @@ public enum KafkaConfigKey implements PropertyDef {
 
     // 元数据延迟
     METADATA_DELAY_ENABLE("kafka.metadata.delay.enable", true, Type.BOOLEAN),
-    METADATA_DELAY("kafka.metadata.delay", 1000 * 1, Type.INT),
+    METADATA_DELAY("kafka.metadata.delay", 1000 * 10, Type.INT),
+    METADATA_CACHE_ENABLE("kafka.metadata.enable", true, Type.BOOLEAN),
+    METADATA_CACHE_EXPIRE_TIME("kafka.metadata.expire.time", 1000 * 60 * 1, Type.INT),
+    METADATA_FUZZY_SEARCH_ENABLE("kafka.metadata.fuzzy.enable", true, Type.BOOLEAN),
     // 拉取延迟
     FETCH_DELAY("kafka.fetch.delay", true, Type.BOOLEAN),
     // 写入超时
@@ -66,9 +69,10 @@ public enum KafkaConfigKey implements PropertyDef {
     // 生产延迟
     PRODUCE_DELAY_ENABLE("kafka.produce.delay.enable", true, Type.BOOLEAN),
     PRODUCE_DELAY("kafka.produce.delay", 1000 * 1, Type.INT),
-    // 详细日志
-    LOG_DETAIL("kafka.log.detail", false, Type.BOOLEAN),
-    LOG_DETAIL_PREFIX("kafka.log.detail.", false, Type.BOOLEAN),
+
+    // 启用认证
+    AUTH_ENABLE("kafka.auth.enable", false, Type.BOOLEAN),
+    AUTH_ENABLE_PREFIX("kafka.auth.enable.", null, Type.BOOLEAN),
 
     ;
 

@@ -16,10 +16,14 @@
 package org.joyqueue.broker.archive;
 
 import org.joyqueue.broker.BrokerContext;
+import org.joyqueue.broker.limit.SubscribeRateLimiter;
 import org.joyqueue.toolkit.lang.Close;
 import org.joyqueue.toolkit.service.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * Created by chengzhiliang on 2018/12/6.
@@ -37,6 +41,9 @@ public class ArchiveManager extends Service {
 
     // 归档配置
     private ArchiveConfig archiveConfig;
+
+    // 归档限流器
+    private SubscribeRateLimiter rateLimiterManager;
 
     public ArchiveManager(BrokerContext context) {
         this.context = context;
@@ -70,11 +77,14 @@ public class ArchiveManager extends Service {
         if (archiveConfig == null) {
             archiveConfig = new ArchiveConfig(context == null ? null : context.getPropertySupplier());
         }
+        if (rateLimiterManager == null) {
+            rateLimiterManager = new ArchiveRateLimiterManager(context);
+        }
         if (sendArchiveService == null) {
-            this.sendArchiveService = new ProduceArchiveService(archiveConfig, context.getClusterManager(), context.getConsume(), context.getMessageConvertSupport());
+            this.sendArchiveService = new ProduceArchiveService(archiveConfig, context, rateLimiterManager);
         }
         if (consumeArchiveService == null) {
-            this.consumeArchiveService = new ConsumeArchiveService(archiveConfig, context.getClusterManager());
+            this.consumeArchiveService = new ConsumeArchiveService(archiveConfig, context, rateLimiterManager);
         }
     }
 
@@ -102,6 +112,9 @@ public class ArchiveManager extends Service {
      * @return 未归档的发送日志条数
      */
     public long getSendBacklogNum() {
+        if (sendArchiveService == null) {
+            return 0;
+        }
         return sendArchiveService.remainMessagesSum();
     }
 
@@ -111,7 +124,29 @@ public class ArchiveManager extends Service {
      * @return 剩余未归档消费日志的大小（文件数量 * 文件大小）
      */
     public long getConsumeBacklogNum() {
+        if (consumeArchiveService == null) {
+            return 0;
+        }
         return consumeArchiveService.getRemainConsumeLogFileNum();
     }
 
+    /**
+     * 按主题获取未归档的发送日志条数
+     *
+     * @return 未归档的发送日志条数
+     */
+    public Map<String, Long> getSendBacklogNumByTopic() {
+        if (sendArchiveService == null) {
+            return Collections.emptyMap();
+        }
+        return sendArchiveService.getArchivePosition();
+    }
+
+    public ArchiveConfig getArchiveConfig() {
+        return archiveConfig;
+    }
+
+    public void setArchiveConfig(ArchiveConfig archiveConfig) {
+        this.archiveConfig = archiveConfig;
+    }
 }

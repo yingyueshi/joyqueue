@@ -124,7 +124,11 @@ public class ProducerServiceImpl  implements ProducerService {
     @Override
     public List<Producer> findByTopic(String namespace, String topic) {
         try {
-            return fillProducers(producerNameServerService.findByTopic(topic, namespace));
+            TopicName topicName = TopicName.parse(topic);
+            if (StringUtils.isNoneBlank(topicName.getNamespace()) && StringUtils.isBlank(namespace)) {
+                namespace = topicName.getNamespace();
+            }
+            return fillProducers(producerNameServerService.findByTopic(topicName.getCode(), namespace));
         } catch (Exception e) {
             logger.error("findByTopic producer with nameServer failed, producer is {}, {}", namespace, topic, e);
             throw new RuntimeException(e);
@@ -179,6 +183,23 @@ public class ProducerServiceImpl  implements ProducerService {
         if (application != null) {
             app.setId(application.getId());
             app.setName(application.getName());
+            producer.setOwner(application.getOwner());
+        }
+        if (StringUtils.isNotBlank(producer.getConfig().getWeight())) {
+            String[] split = producer.getConfig().getWeight().split(",");
+            StringBuilder builder = new StringBuilder();
+            for (String item: split) {
+                String[] items = item.split(":");
+                if (Long.parseLong(items[1]) > 0) {
+                    builder.append(items[0]).append(":").append(items[1]).append(",");
+                }
+            }
+            if (builder.length() > 0) {
+                builder.deleteCharAt(builder.length() - 1);
+                producer.getConfig().setWeight(builder.toString());
+            } else {
+                producer.getConfig().setWeight(null);
+            }
         }
         return producer;
     }

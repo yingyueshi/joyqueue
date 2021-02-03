@@ -17,12 +17,14 @@ package org.joyqueue.broker.consumer.position;
 
 import com.google.common.base.Preconditions;
 import com.jd.laf.extension.ExtensionManager;
+import org.apache.commons.lang3.StringUtils;
 import org.joyqueue.broker.cluster.ClusterManager;
 import org.joyqueue.broker.consumer.ConsumeConfig;
 import org.joyqueue.broker.consumer.model.ConsumePartition;
 import org.joyqueue.broker.consumer.position.model.Position;
 import org.joyqueue.domain.Consumer;
 import org.joyqueue.domain.PartitionGroup;
+import org.joyqueue.domain.TopicConfig;
 import org.joyqueue.domain.TopicName;
 import org.joyqueue.event.EventType;
 import org.joyqueue.event.MetaEvent;
@@ -37,9 +39,9 @@ import org.joyqueue.store.PartitionGroupStore;
 import org.joyqueue.store.StoreService;
 import org.joyqueue.toolkit.concurrent.EventListener;
 import org.joyqueue.toolkit.concurrent.LoopThread;
+import org.joyqueue.toolkit.concurrent.NamedThreadFactory;
 import org.joyqueue.toolkit.service.Service;
 import org.joyqueue.toolkit.time.SystemClock;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +52,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -70,9 +76,13 @@ public class PositionManager extends Service {
     // 消费位点快照存储服务
     private PositionStore<ConsumePartition, Position> positionStore;
     // 补偿消费位置线程（10分钟跑一次）
-    private LoopThread thread;
+    private LoopThread checkSubscribeThread;
     // 最近应答时间跟踪器
     private Map<ConsumePartition, /* 最新应答时间 */ AtomicLong> lastAckTimeTrace = new ConcurrentHashMap<>();
+    // 刷新线程
+    private ExecutorService flushIndexThread;
+    // 后刷新时间
+    private AtomicLong lastFlushIndexTimestamp = new AtomicLong();
 
     public PositionManager(ClusterManager clusterManager, StoreService storeService, ConsumeConfig consumeConfig) {
         this.clusterManager = clusterManager;
@@ -93,6 +103,8 @@ public class PositionManager extends Service {
                 ((LocalFileStore) positionStore).setBasePath(config.getConsumePositionPath());
             }
         }
+        flushIndexThread = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<Runnable>(10), new NamedThreadFactory("joyqueue-consume-flush-index-threads", true));
     }
 
     @Override
@@ -101,14 +113,14 @@ public class PositionManager extends Service {
 
         positionStore.start();
 
-        this.thread = LoopThread.builder()
+        this.checkSubscribeThread = LoopThread.builder()
                 .sleepTime(1000 * 60 * 10, 1000 * 60 * 10)
                 .name("Check-Subscribe-Thread")
                 .onException(e -> logger.error(e.getMessage(), e))
                 .doWork(this::compensationPosition)
                 .build();
 
-        this.thread.start();
+        this.checkSubscribeThread.start();
 
         clusterManager.addListener(new AddConsumeListener());
         clusterManager.addListener(new RemoveConsumeListener());
@@ -127,6 +139,14 @@ public class PositionManager extends Service {
         Iterator<ConsumePartition> iterator = positionStore.iterator();
         while (iterator.hasNext()) {
             ConsumePartition next = iterator.next();
+            TopicConfig topicConfig = clusterManager.getTopicConfig(TopicName.parse(next.getTopic()));
+            if (topicConfig != null) {
+                PartitionGroup partitionGroup = topicConfig.fetchPartitionGroupByPartition(next.getPartition());
+                if (partitionGroup != null) {
+                    next.setPartitionGroup(partitionGroup.getGroup());
+                }
+            }
+
             // 检查是否有订阅关系
             Consumer.ConsumerPolicy consumerPolicy = clusterManager.tryGetConsumerPolicy(TopicName.parse(next.getTopic()), next.getApp());
             if (consumerPolicy == null) {
@@ -141,7 +161,8 @@ public class PositionManager extends Service {
     @Override
     protected void doStop() {
         super.doStop();
-
+        flushIndexThread.shutdownNow();
+        positionStore.forceFlush();
         positionStore.stop();
 
         logger.info("PositionManager is stopped.");
@@ -167,7 +188,7 @@ public class PositionManager extends Service {
         Map<ConsumePartition, Position> consumeInfo = new HashMap<>();
 
         if (appList != null && !appList.isEmpty()) {
-            List<PartitionGroup> partitionGroupList = clusterManager.getPartitionGroup(topic);
+            List<PartitionGroup> partitionGroupList = clusterManager.getLocalPartitionGroups(topic);
             for (PartitionGroup group : partitionGroupList) {
                 if (group.getGroup() == partitionGroup) {
                     Set<Short> partitions = group.getPartitions();
@@ -216,8 +237,9 @@ public class PositionManager extends Service {
                 Position val = entry.getValue();
                 positionStore.put(key, val);
             });
+
             // 刷盘
-            positionStore.forceFlush();
+            tryForceFlush();
         } catch (Exception ex) {
             logger.error("set consume position error.", ex);
             return false;
@@ -433,11 +455,15 @@ public class PositionManager extends Service {
      * @param partition 消费分区
      * @return 指定分区已经消费到的消息序号
      */
-    private long getMaxMsgIndex(TopicName topic, short partition) {
-        Integer partitionGroupId = clusterManager.getPartitionGroupId(topic, partition);
-        PartitionGroupStore store = storeService.getStore(topic.getFullName(), partitionGroupId);
-        long rightIndex = store.getRightIndex(partition);
-        return rightIndex;
+    private long getMaxMsgIndex(TopicName topic, short partition, int groupId) {
+        try {
+            PartitionGroupStore store = storeService.getStore(topic.getFullName(), groupId);
+            long rightIndex = store.getRightIndex(partition);
+            return rightIndex;
+        } catch (Exception e) {
+            logger.error("getMaxMsgIndex exception, topic: {}, partition: {}, groupId: {}", topic, partition, groupId);
+            return 0;
+        }
     }
 
     protected void checkState() {
@@ -459,7 +485,7 @@ public class PositionManager extends Service {
         }
         checkState();
         // 从元数据中获取分组和分区数据，初始化拉取和应答位置
-        List<Short> partitionList = clusterManager.getMasterPartitionList(topic);
+        List<Short> partitionList = clusterManager.getReplicaPartitions(topic);
 
         logger.debug("add consumer partitionList:[{}]", partitionList.toString());
 
@@ -471,7 +497,7 @@ public class PositionManager extends Service {
             consumePartition.setPartitionGroup(partitionGroupId);
 
             // 获取当前（主题+分区）的最大消息序号
-            long currentIndex = getMaxMsgIndex(topic, partition);
+            long currentIndex = getMaxMsgIndex(topic, partition, partitionGroupId);
             currentIndex = Math.max(currentIndex, 0);
             // 为新订阅的应用初始化消费位置对象
             Position position = new Position(currentIndex, currentIndex, currentIndex, currentIndex);
@@ -504,7 +530,7 @@ public class PositionManager extends Service {
             Position remove = positionStore.remove(consumePartition);
 
             logger.info("Remove ConsumePartition by topic:{}, app:{}, partition:{}, curIndex:{}",
-                    consumePartition.getTopic(), consumePartition.getApp(), consumePartition.getPartition(), remove.toString());
+                    consumePartition.getTopic(), consumePartition.getApp(), consumePartition.getPartition(), String.valueOf(remove));
         });
         // 落盘
         positionStore.forceFlush();
@@ -530,14 +556,14 @@ public class PositionManager extends Service {
      * @param partitionGroup 分区分组
      */
     private void addPartitionGroup(TopicName topic, PartitionGroup partitionGroup) {
-        List<String> appList = clusterManager.getAppByTopic(topic);
+        List<String> appList = clusterManager.getConsumersByTopic(topic);
         Set<Short> partitions = partitionGroup.getPartitions();
 
         logger.debug("add partitionGroup appList:[{}], partitions:[{}]", appList.toString(), partitions.toString());
         AtomicBoolean changed = new AtomicBoolean(false);
         partitions.stream().forEach(partition -> {
             // 获取当前（主题+分区）的最大消息序号
-            long currentIndex = getMaxMsgIndex(topic, partition);
+            long currentIndex = getMaxMsgIndex(topic, partition, partitionGroup.getGroup());
             long currentIndexVal = Math.max(currentIndex, 0);
 
             appList.stream().forEach(app -> {
@@ -589,8 +615,26 @@ public class PositionManager extends Service {
                 logger.info("Remove ConsumePartition by topic:{}, app:{}, partition:{}", consumePartition.getTopic(), consumePartition.getApp(), consumePartition.getPartition());
             }
         }
-
         positionStore.forceFlush();
+    }
+
+    protected void tryForceFlush() {
+        if (config.getIndexFlushInterval() <= 0) {
+            positionStore.forceFlush();
+            return;
+        }
+
+        long now = SystemClock.now();
+        long lastFlushTimestamp = this.lastFlushIndexTimestamp.get();
+        if (now - lastFlushTimestamp < config.getIndexFlushInterval()) {
+            return;
+        }
+        if (!this.lastFlushIndexTimestamp.compareAndSet(lastFlushTimestamp, now)) {
+            return;
+        }
+        flushIndexThread.execute(() -> {
+            positionStore.forceFlush();
+        });
     }
 
     /**

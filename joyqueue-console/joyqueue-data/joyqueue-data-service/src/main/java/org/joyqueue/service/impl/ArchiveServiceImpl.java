@@ -15,14 +15,23 @@
  */
 package org.joyqueue.service.impl;
 
+import org.apache.commons.lang3.StringUtils;
+import org.joyqueue.domain.TopicName;
 import org.joyqueue.exception.JoyQueueException;
 import org.joyqueue.exception.ServiceException;
+import org.joyqueue.model.ListQuery;
+import org.joyqueue.model.domain.Application;
+import org.joyqueue.model.domain.User;
+import org.joyqueue.model.query.QApplication;
 import org.joyqueue.model.query.QArchive;
-import org.joyqueue.server.archive.store.QueryCondition;
 import org.joyqueue.server.archive.store.api.ArchiveStore;
 import org.joyqueue.server.archive.store.model.ConsumeLog;
 import org.joyqueue.server.archive.store.model.SendLog;
+import org.joyqueue.server.archive.store.query.QueryCondition;
+import org.joyqueue.service.ApplicationService;
 import org.joyqueue.service.ArchiveService;
+import org.joyqueue.service.TopicService;
+import org.joyqueue.util.LocalSession;
 import org.joyqueue.util.NullUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +41,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Created by wangxiaofei1 on 2018/12/7.
@@ -43,12 +53,48 @@ public class ArchiveServiceImpl implements ArchiveService {
     @Autowired(required = false)
     private ArchiveStore archiveStore;
 
+    @Autowired(required = false)
+    private ApplicationService applicationService;
+
+    @Autowired(required = false)
+    private TopicService topicService;
+
     @Value("${archive.enable:false}")
     private Boolean archiveEnable;
 
     @Override
     public void register(ArchiveStore archiveStore) {
         this.archiveStore = archiveStore;
+    }
+
+    @Override
+    public void validate(QArchive qArchive) {
+        check();
+
+        String topicFullName = qArchive.getTopic();
+        if (StringUtils.isEmpty(topicFullName)) {
+            throw new ServiceException(ServiceException.BAD_REQUEST, "主题不能为空");
+        }
+
+        User user = LocalSession.getSession().getUser();
+        if (user.getRole() == User.UserRole.ADMIN.value()) {
+            return;
+        }
+
+        QApplication qApplication = new QApplication();
+        qApplication.setUserId(user.getId());
+        qApplication.setAdmin(false);
+        List<Application> userApps = applicationService.findByQuery(new ListQuery(qApplication));
+        if (NullUtil.isEmpty(userApps)) {
+            throw new ServiceException(ServiceException.BAD_REQUEST, "尚未订阅主题，没有权限");
+        }
+
+        TopicName topicName = TopicName.parse(topicFullName);
+        Set<String> topicApps = topicService.findAppsByTopic(topicName.getNamespace(), topicName.getCode());
+        if (!userApps.stream().filter(ua ->
+                topicApps.stream().filter(ta -> ta.equals(ua.getCode())).findAny().isPresent()).findAny().isPresent()) {
+            throw new ServiceException(ServiceException.BAD_REQUEST, "尚未订阅此主题，没有操作权限");
+        }
     }
 
     @Override
@@ -66,7 +112,7 @@ public class ArchiveServiceImpl implements ArchiveService {
         QueryCondition.RowKey startRow = new QueryCondition.RowKey();
         startRow.setBusinessId(businessId);
         startRow.setMessageId(messageId);
-        startRow.setTime(time);
+        startRow.setSendTime(time);
         startRow.setTopic(topic);
         queryCondition.setRowKey(startRow);
         SendLog sendLog = archiveStore.getOneSendLog(queryCondition);
@@ -116,10 +162,13 @@ public class ArchiveServiceImpl implements ArchiveService {
             startRow.setMessageId(qArchive.getMessageId());
         }
         if (qArchive.getBeginTime() != null) {
-            startRow.setTime(qArchive.getBeginTime().getTime());
+            startRow.setBeginTime(qArchive.getBeginTime().getTime());
+        }
+        if (qArchive.getEndTime() != null) {
+            startRow.setEndTime(qArchive.getEndTime().getTime());
         }
         if (qArchive.getSendTime() != null) {
-            startRow.setTime(qArchive.getSendTime().getTime());
+            startRow.setSendTime(qArchive.getSendTime().getTime());
         }
         if (NullUtil.isNotBlank(qArchive.getRowKeyStart())) {
             queryCondition.setStartRowKeyByteArr(qArchive.getRowKeyStart());
@@ -136,8 +185,14 @@ public class ArchiveServiceImpl implements ArchiveService {
         if (NullUtil.isNotBlank(qArchive.getMessageId())) {
             endRow.setMessageId(qArchive.getMessageId());
         }
+        if (qArchive.getBeginTime() != null) {
+            endRow.setBeginTime(qArchive.getBeginTime().getTime());
+        }
         if (qArchive.getEndTime() != null) {
-            endRow.setTime(qArchive.getEndTime().getTime());
+            endRow.setEndTime(qArchive.getEndTime().getTime());
+        }
+        if (qArchive.getSendTime() != null) {
+            endRow.setSendTime(qArchive.getSendTime().getTime());
         }
         queryCondition.setStopRowKey(endRow);
         //设置数量

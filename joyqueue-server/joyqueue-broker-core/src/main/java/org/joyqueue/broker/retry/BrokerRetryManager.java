@@ -18,18 +18,30 @@ package org.joyqueue.broker.retry;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.jd.laf.extension.ExtensionManager;
+import org.apache.commons.collections.CollectionUtils;
 import org.joyqueue.broker.BrokerContext;
 import org.joyqueue.broker.BrokerContextAware;
+import org.joyqueue.broker.Plugins;
 import org.joyqueue.broker.cluster.ClusterManager;
+import org.joyqueue.broker.limit.RateLimiter;
+import org.joyqueue.broker.limit.SubscribeRateLimiter;
+import org.joyqueue.broker.monitor.BrokerMonitor;
 import org.joyqueue.broker.network.support.BrokerTransportClientFactory;
+import org.joyqueue.config.BrokerConfigKey;
 import org.joyqueue.domain.Broker;
 import org.joyqueue.domain.Consumer;
+import org.joyqueue.domain.Subscription;
 import org.joyqueue.domain.TopicName;
 import org.joyqueue.event.EventType;
 import org.joyqueue.event.MetaEvent;
+import org.joyqueue.exception.JoyQueueCode;
 import org.joyqueue.exception.JoyQueueException;
+import org.joyqueue.monitor.PointTracer;
+import org.joyqueue.monitor.TraceStat;
+import org.joyqueue.network.session.Joint;
 import org.joyqueue.network.transport.TransportClient;
 import org.joyqueue.network.transport.config.ClientConfig;
+import org.joyqueue.network.transport.config.TransportConfigSupport;
 import org.joyqueue.nsr.NameService;
 import org.joyqueue.nsr.event.UpdateBrokerEvent;
 import org.joyqueue.server.retry.NullMessageRetry;
@@ -43,6 +55,7 @@ import org.joyqueue.toolkit.config.Property;
 import org.joyqueue.toolkit.config.PropertySupplier;
 import org.joyqueue.toolkit.retry.RetryPolicy;
 import org.joyqueue.toolkit.service.Service;
+import org.joyqueue.toolkit.time.SystemClock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,13 +86,14 @@ public class BrokerRetryManager extends Service implements MessageRetry<Long>, B
     private NameService nameService;
     // 集群管理
     private ClusterManager clusterManager;
-
     private PropertySupplier propertySupplier;
-
+    private SubscribeRateLimiter rateLimiterManager;
+    private BrokerMonitor brokerMonitor;
+    private PointTracer tracer;
 
     public BrokerRetryManager(BrokerContext brokerContext) {
         setBrokerContext(brokerContext);
-
+        this.rateLimiterManager=new BrokerRetryRateLimiterManager(brokerContext);
     }
 
     @Override
@@ -108,7 +122,7 @@ public class BrokerRetryManager extends Service implements MessageRetry<Long>, B
 
                 @Override
                 public TransportClient createTransportClient() {
-                    ClientConfig clientConfig = new ClientConfig();
+                    ClientConfig clientConfig = TransportConfigSupport.buildClientConfig(propertySupplier, "retry.remote.client");
                     clientConfig.setIoThreadName("joyqueue-retry-io-eventLoop");
                     return new BrokerTransportClientFactory().create(clientConfig);
                 }
@@ -168,7 +182,7 @@ public class BrokerRetryManager extends Service implements MessageRetry<Long>, B
     protected void doStart() throws Exception {
         super.doStart();
         clusterManager.addListener(eventListener);
-
+        clusterManager.addListener(rateLimiterManager);
         retryType = clusterManager.getBroker().getRetryType();
         delegate = loadRetryManager(retryType);
     }
@@ -181,17 +195,83 @@ public class BrokerRetryManager extends Service implements MessageRetry<Long>, B
 
     @Override
     public void addRetry(List<RetryMessageModel> retryMessageModelList) throws JoyQueueException {
-        delegate.addRetry(retryMessageModelList);
+        if (CollectionUtils.isEmpty(retryMessageModelList)) {
+            return;
+        }
+        String topic = retryMessageModelList.get(0).getTopic();
+        String app = retryMessageModelList.get(0).getApp();
+        Consumer consumer = clusterManager.getNameService().getConsumerByTopicAndApp(TopicName.parse(topic), app);
+        if (consumer != null && consumer.getConsumerPolicy() != null && consumer.getConsumerPolicy().getRetry() != null && !consumer.getConsumerPolicy().getRetry()) {
+            throw new JoyQueueException(JoyQueueCode.RETRY_TOKEN_LIMIT);
+        }
+
+        Set<Joint> consumers= retryConsumers(retryMessageModelList);
+        if(retryTokenAvailable(consumers)) {
+            TraceStat totalRetryTrace = tracer.begin("BrokerRetryManager.addRetry");
+            TraceStat appRetryTrace = tracer.begin(String.format("BrokerRetryManager.addRetry.%s.%s", app.replace(".", "_"), topic));
+            try {
+                long startTime = SystemClock.now();
+                delegate.addRetry(retryMessageModelList);
+                brokerMonitor.onAddRetry(topic, app, retryMessageModelList.size(), SystemClock.now() - startTime);
+                tracer.end(totalRetryTrace);
+                tracer.end(appRetryTrace);
+            } catch (Exception e) {
+                tracer.error(totalRetryTrace);
+                tracer.error(appRetryTrace);
+                throw e;
+            }
+        }else{
+            TraceStat limit = tracer.begin("BrokerRetryManager.rate.limited");
+            logger.warn("Broker retry message limited, limit consumers: {}", consumers);
+            tracer.end(limit);
+            throw new JoyQueueException(JoyQueueCode.RETRY_TOKEN_LIMIT);
+        }
+    }
+
+
+    /**
+     *
+     * @return true if any of topic has retry token or ulimit
+     *
+     **/
+    public boolean retryTokenAvailable(Set<Joint> consumers){
+        for(Joint consumer:consumers) {
+            RateLimiter rateLimiter= rateLimiterManager.getOrCreate(consumer.getTopic(),consumer.getApp(), Subscription.Type.CONSUMPTION);
+            if(rateLimiter==null||rateLimiter.tryAcquireTps()){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @return  retry consumers
+     *
+     **/
+    public Set<Joint> retryConsumers(List<RetryMessageModel> retryMessageModelList){
+        Set<Joint> consumers=new HashSet(retryMessageModelList.size());
+        for(RetryMessageModel m:retryMessageModelList){
+            consumers.add(new Joint(m.getTopic(),m.getApp()));
+        }
+        return consumers;
     }
 
     @Override
     public void retrySuccess(String topic, String app, Long[] messageIds) throws JoyQueueException {
+        if (messageIds == null) {
+            return;
+        }
         delegate.retrySuccess(topic, app, messageIds);
+        brokerMonitor.onRetrySuccess(topic, app, messageIds.length);
     }
 
     @Override
     public void retryError(String topic, String app, Long[] messageIds) throws JoyQueueException {
+        if (messageIds == null) {
+            return;
+        }
         delegate.retryError(topic, app, messageIds);
+        brokerMonitor.onRetryFailure(topic, app, messageIds.length);
     }
 
     @Override
@@ -240,6 +320,8 @@ public class BrokerRetryManager extends Service implements MessageRetry<Long>, B
         this.nameService = brokerContext.getNameService();
         this.clusterManager = brokerContext.getClusterManager();
         this.propertySupplier = brokerContext.getPropertySupplier();
+        this.brokerMonitor = brokerContext.getBrokerMonitor();
+        this.tracer = Plugins.TRACERERVICE.get(PropertySupplier.getValue(propertySupplier, BrokerConfigKey.TRACER_TYPE));
     }
 
     @Override
@@ -281,4 +363,6 @@ public class BrokerRetryManager extends Service implements MessageRetry<Long>, B
         }
 
     }
+
+
 }

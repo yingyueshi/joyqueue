@@ -51,6 +51,8 @@ public class AppendEntriesRequest extends JoyQueuePayload implements Releasable 
 
     private ByteBuffer entries;
 
+    private int entriesLength;
+
     public TopicPartitionGroup getTopicPartitionGroup() {
         return topicPartitionGroup;
     }
@@ -148,7 +150,18 @@ public class AppendEntriesRequest extends JoyQueuePayload implements Releasable 
     }
 
     public int getEntriesLength() {
+        if (entries == null) {
+            return 0;
+        }
         return entries.remaining();
+    }
+
+    public int getOrigEntriesLength() {
+        return entriesLength;
+    }
+
+    public void setOrigEntriesLength(int length) {
+        this.entriesLength = length;
     }
 
     @Override
@@ -172,6 +185,7 @@ public class AppendEntriesRequest extends JoyQueuePayload implements Releasable 
                 .append(", match:").append(match)
                 .append(", entriesTerm:").append(entriesTerm)
                 .append(", entryLength:").append(entries == null ? 0 : entries.remaining())
+                .append(", origEntryLength:").append(entriesLength)
                 .append("}").toString();
     }
 
@@ -245,6 +259,11 @@ public class AppendEntriesRequest extends JoyQueuePayload implements Releasable 
 
         public Build entries(ByteBuffer entries) {
             appendEntriesRequest.setEntries(entries);
+            return this;
+        }
+
+        public Build origEntriesLength(int length) {
+            appendEntriesRequest.setOrigEntriesLength(length);
             return this;
         }
     }

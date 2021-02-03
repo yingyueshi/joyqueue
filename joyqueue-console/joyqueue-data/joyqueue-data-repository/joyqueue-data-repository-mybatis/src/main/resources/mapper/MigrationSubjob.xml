@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.joyqueue.repository.MigrationSubjobRepository">
+
+	<resultMap id="baseResultMap" type="MigrationSubjob">
+		<result property="id" column="id" jdbcType="BIGINT"/>
+		<result property="migrationId" column="migration_id" jdbcType="BIGINT"/>
+		<result property="topicCode" column="topic_code" jdbcType="VARCHAR"/>
+		<result property="namespaceCode" column="namespace_code" jdbcType="VARCHAR"/>
+		<result property="pgNo" column="pg_no" jdbcType="TINYINT"/>
+		<result property="srcBrokerId" column="src_broker_id" jdbcType="BIGINT"/>
+		<result property="tgtBrokerId" column="tgt_broker_id" jdbcType="BIGINT"/>
+		<result property="version" column="version" jdbcType="TINYINT"/>
+		<result property="executor" column="executor" jdbcType="VARCHAR"/>
+		<result property="exception" column="exception" jdbcType="VARCHAR"/>
+		<result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
+		<result property="createBy.id" column="create_by" jdbcType="BIGINT"/>
+		<result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
+		<result property="updateBy.id" column="update_by" jdbcType="BIGINT"/>
+		<result property="status" column="status" jdbcType="TINYINT"/>
+	</resultMap>
+
+    <insert id="add" useGeneratedKeys="true" keyProperty="id" parameterType="MigrationSubjob">
+       <![CDATA[
+          INSERT INTO migration_subjob(
+            migration_id,
+            topic_code,
+            namespace_code,
+            pg_no,
+            src_broker_id,
+            tgt_broker_id,
+            version,
+            `executor`,
+            `exception`,
+            `create_time`,
+            create_by,
+            update_time,
+            update_by,
+            status
+            )
+          VALUES(
+            #{migrationId},
+            #{topicCode},
+            #{namespaceCode},
+            #{pgNo},
+            #{srcBrokerId},
+            #{tgtBrokerId},
+            #{version},
+            #{executor},
+            #{exception},
+            #{createTime},
+            #{createBy.id},
+            #{updateTime},
+            #{updateBy.id},
+            #{status}
+            )
+       ]]>
+	</insert>
+
+    <update id="update" parameterType="MigrationSubjob">
+	 <![CDATA[
+        UPDATE
+            migration_subjob
+        SET
+           `migration_id` = #{migrationId},
+            topic_code = #{topicCode},
+            namespace_code = #{namespaceCode},
+            pg_no = #{pgNo},
+            src_broker_id = #{srcBrokerId},
+            tgt_broker_id = #{tgtBrokerId},
+            version = #{version},
+            `executor` = #{executor},
+            `exception` = #{exception},
+            `update_by`=#{updateBy.id},
+            `update_time`=#{updateTime}
+        WHERE
+            id=#{id}
+        ]]>
+	</update>
+
+    <update id="delete" parameterType="MigrationSubjob">
+    <![CDATA[
+        UPDATE
+            migration_subjob
+        SET
+            update_by=#{updateBy.id},
+            update_time=#{updateTime},
+            status=-1
+        WHERE
+            id=#{id}
+        ]]>
+	</update>
+
+	<sql id="baseColumn">
+       SELECT
+		t.id,
+		t.migration_id,
+		t.topic_code,
+		t.namespace_code,
+		t.pg_no,
+		t.src_broker_id,
+		t.tgt_broker_id,
+		t.version,
+		`executor`,
+		`exception`,
+		t.create_time,
+		t.create_by,
+		t.update_time,
+		t.update_by,
+		t.status
+	</sql>
+
+    <select id="findById" parameterType="long" resultMap="baseResultMap">
+        <include refid="baseColumn"/>
+		FROM migration_subjob AS t
+        WHERE t.id=#{id}
+    </select>
+
+	<select id="findByMigrationId" parameterType="long" resultMap="baseResultMap">
+		<include refid="baseColumn"/>
+		FROM migration_subjob AS t
+		WHERE t.migration_id=#{migrationId}
+	</select>
+
+	<select id="findByExecutor" resultMap="baseResultMap">
+		<include refid="baseColumn"/>
+		FROM migration_subjob AS t
+		WHERE t.`executor`=#{executor}
+		AND t.`status`=#{status}
+	</select>
+
+	<select id="findByStatus" resultMap="baseResultMap">
+		<include refid="baseColumn"/>
+		FROM migration_subjob AS t
+		WHERE t.`status`=#{status}
+	</select>
+
+    <update id="state" parameterType="MigrationSubjob">
+        <![CDATA[
+        UPDATE
+            migration_subjob
+        SET
+           `status`=#{status},
+           `update_by`=#{updateBy.id},
+           `update_time`=#{updateTime}
+        WHERE
+            id=#{id}
+        ]]>
+    </update>
+
+
+	<update id="updateByTask">
+        <![CDATA[
+        UPDATE
+            migration_subjob
+        SET
+           `status`=#{status},
+           `update_by`=#{updateBy},
+           `update_time`=NOW()
+        WHERE
+            migration_id=#{taskId}
+        	AND status = -1
+        ]]>
+    </update>
+
+	<update id="updateExecutor" parameterType="MigrationSubjob">
+        <![CDATA[
+        UPDATE
+            migration_subjob
+        SET
+           `status`=#{status},
+           `executor`=#{executor},
+           `update_by`=#{updateBy.id},
+           `update_time`=#{updateTime}
+        WHERE
+            id=#{id}
+        	AND status = 0
+        ]]>
+    </update>
+
+	<update id="fail" parameterType="MigrationSubjob">
+        <![CDATA[
+        UPDATE
+            migration_subjob
+        SET
+           `status`=#{status},
+           `exception`=IFNULL(CONCAT_WS('. ' + #{updateTime} + ':',`exception`,#{exception}),#{updateTime} + ':' + #{exception}),
+           `update_by`=#{updateBy.id},
+           `update_time`=#{updateTime}
+        WHERE
+            id=#{id}
+        ]]>
+    </update>
+
+	<update id="success" parameterType="MigrationSubjob">
+        <![CDATA[
+        UPDATE
+            migration_subjob
+        SET
+           `status`=#{status},
+           `exception`=#{exception},
+           `update_by`=#{updateBy.id},
+           `update_time`=#{updateTime}
+        WHERE
+            id=#{id}
+        ]]>
+    </update>
+</mapper>

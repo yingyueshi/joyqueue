@@ -20,7 +20,10 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.jd.laf.extension.ExtensionPoint;
 import com.jd.laf.extension.ExtensionPointLazy;
+import org.apache.commons.lang3.StringUtils;
 import org.joyqueue.broker.cluster.ClusterManager;
+import org.joyqueue.broker.cluster.ClusterNameService;
+import org.joyqueue.broker.config.Configuration;
 import org.joyqueue.broker.monitor.service.MetadataMonitorService;
 import org.joyqueue.domain.Consumer;
 import org.joyqueue.domain.Producer;
@@ -43,7 +46,7 @@ import org.joyqueue.nsr.service.internal.TopicInternalService;
 import org.joyqueue.response.BooleanResponse;
 import org.joyqueue.toolkit.concurrent.NamedThreadFactory;
 import org.joyqueue.toolkit.config.Property;
-import org.apache.commons.lang3.StringUtils;
+import org.joyqueue.toolkit.config.PropertySupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,14 +69,16 @@ public class DefaultMetadataMonitorService implements MetadataMonitorService {
     private static final ExtensionPoint<InternalServiceProvider, String> SERVICE_PROVIDER_POINT = new ExtensionPointLazy<>(InternalServiceProvider.class);
 
     private ClusterManager clusterManager;
+    private ClusterNameService clusterNameService;
     private MetadataSynchronizer metadataSynchronizer;
     private String source;
     private String target;
     private int interval;
     private ExecutorService syncThreadPool;
 
-    public DefaultMetadataMonitorService(ClusterManager clusterManager) {
+    public DefaultMetadataMonitorService(ClusterManager clusterManager, ClusterNameService clusterNameService) {
         this.clusterManager = clusterManager;
+        this.clusterNameService = clusterNameService;
         this.metadataSynchronizer = new MetadataSynchronizer();
     }
 
@@ -83,8 +88,14 @@ public class DefaultMetadataMonitorService implements MetadataMonitorService {
         if (isCluster) {
             return clusterManager.getTopicConfig(topicName);
         } else {
-            return clusterManager.getNameService().getTopicConfig(topicName);
+            return clusterNameService.getTopicConfig(topicName);
         }
+    }
+
+    @Override
+    public TopicConfig rebuildTopicMetadata(String topic) {
+        TopicName topicName = TopicName.parse(topic);
+        return clusterManager.rebuildTopicConfigCache(topicName);
     }
 
     @Override
@@ -270,12 +281,23 @@ public class DefaultMetadataMonitorService implements MetadataMonitorService {
     }
 
     @Override
-    public List<String> getConfigsMetadata() {
-        List<String> result = Lists.newLinkedList();
+    public Map<String, String> getConfigsMetadata() {
+        Map<String, String> result = Maps.newHashMap();
         for (Property property : clusterManager.getPropertySupplier().getProperties()) {
-            result.add(String.valueOf(property.getValue()));
+            result.put(String.valueOf(property.getKey()), String.valueOf(property.getValue()));
         }
         return result;
+    }
+
+    @Override
+    public String updateConfigMetadata(String key, String group, String value) {
+        PropertySupplier propertySupplier = clusterManager.getPropertySupplier();
+        if (!(propertySupplier instanceof Configuration)) {
+            return "failed";
+        }
+        Configuration configuration = (Configuration) propertySupplier;
+        configuration.addProperty(key, value, group);
+        return "success";
     }
 
     @Override

@@ -15,6 +15,7 @@
  */
 package org.joyqueue.broker.election;
 
+import javafx.geometry.Pos;
 import org.joyqueue.broker.consumer.Consume;
 import org.joyqueue.broker.consumer.model.ConsumePartition;
 import org.joyqueue.broker.consumer.model.PullResult;
@@ -25,6 +26,7 @@ import org.joyqueue.message.MessageLocation;
 import org.joyqueue.network.session.Connection;
 import org.joyqueue.network.session.Consumer;
 
+import java.util.HashMap;
 import java.util.Map;
 
 
@@ -153,12 +155,18 @@ public class ConsumeStub implements Consume {
 
     @Override
     public Map<ConsumePartition, Position> getConsumePositionByGroup(TopicName topic, String app, int partitionGroup) {
-        return null;
+        Map<ConsumePartition, Position> map = new HashMap<>();
+        map.put(new ConsumePartition("test", "app1", (short)1),
+                new Position(1, 1, 1, 1));
+        return map;
     }
 
     @Override
     public Map<ConsumePartition, Position> getConsumePositionByGroup(TopicName topic, int partitionGroup) {
-        return null;
+        Map<ConsumePartition, Position> map = new HashMap<>();
+        map.put(new ConsumePartition("test", "app1", (short)1),
+                new Position(1, 1, 1, 1));
+        return map;
     }
 
     /**

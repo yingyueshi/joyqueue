@@ -78,7 +78,7 @@ public class TopicMessageConsumer extends Service {
 
     @Override
     protected void validate() throws Exception {
-        messagePoller = createMessageConsumer(topic);
+        messagePoller = createMessagePoller(topic);
         messageConsumerDispatcher = new TopicMessageConsumerDispatcher(topic, config, nameServerConfig, messagePoller, messageListenerManager, consumerInterceptorManager);
         messageConsumerScheduler = new TopicMessageConsumerScheduler(topic, config, messagePoller, messageConsumerDispatcher);
     }
@@ -119,12 +119,19 @@ public class TopicMessageConsumer extends Service {
         messageConsumerScheduler.resume();
     }
 
-    protected MessagePoller createMessageConsumer(String topic) {
+    protected MessagePoller createMessagePoller(String topic) {
         TopicName topicName = TopicName.parse(NameServerHelper.getTopicFullName(topic, nameServerConfig));
         TopicMetadata topicMetadata = clusterManager.fetchTopicMetadata(topicName.getFullName(), config.getAppFullName());
 
-        if (topicMetadata == null || topicMetadata.getConsumerPolicy() == null) {
-            throw new ConsumerException(String.format("topic %s is not exist", topic), JoyQueueCode.FW_TOPIC_NOT_EXIST.getCode());
+        if (topicMetadata == null) {
+            throw new ConsumerException(String.format("topic %s does not exist", topic), JoyQueueCode.FW_TOPIC_NOT_EXIST.getCode());
+        }
+        if (topicMetadata.getConsumerPolicy() == null) {
+            throw new ConsumerException(String.format("topic %s consumer %s does not exist", topic, config.getAppFullName()), JoyQueueCode.FW_TOPIC_NOT_EXIST.getCode());
+        }
+
+        if (config.getThread() == ConsumerConfig.NONE_THREAD) {
+            config.setThread(topicMetadata.getPartitions().size());
         }
 
         if (topicMetadata.getType().equals(TopicType.BROADCAST)) {

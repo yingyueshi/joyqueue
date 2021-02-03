@@ -19,14 +19,12 @@ import org.joyqueue.domain.TopicName;
 import org.joyqueue.model.PageResult;
 import org.joyqueue.model.QPageQuery;
 import org.joyqueue.model.domain.AppUnsubscribedTopic;
-import org.joyqueue.model.domain.Broker;
-import org.joyqueue.model.domain.BrokerGroup;
-import org.joyqueue.model.domain.Identity;
 import org.joyqueue.model.domain.Topic;
 import org.joyqueue.model.query.QTopic;
 import org.joyqueue.nsr.NsrService;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * 主题服务
@@ -37,11 +35,8 @@ public interface TopicService extends NsrService<Topic ,String> {
     /**
      * 保存：带分组和Broker信息
      * @param topic
-     * @param brokerGroup
-     * @param brokers
-     * @param operator 操作人
      */
-    void addWithBrokerGroup(Topic topic, BrokerGroup brokerGroup, List<Broker> brokers, Identity operator);
+    void addWithBrokerGroup(Topic topic);
 
     /**
      * 查询未订阅的topics
@@ -65,6 +60,11 @@ public interface TopicService extends NsrService<Topic ,String> {
      */
     Topic findByCode(String namespaceCode, String code);
 
+    /**
+     * 分页查询
+     * @param query
+     * @return
+     */
     PageResult<Topic> search(QPageQuery<QTopic> query);
 
     /**
@@ -72,7 +72,23 @@ public interface TopicService extends NsrService<Topic ,String> {
      * @param brokerId
      * @return topic full name list
      **/
-
     List<TopicName> findTopic(String brokerId) throws Exception;
+
+    /**
+     * 根据Broker和关键字查询topic
+     * @param brokerId
+     * @param keyword
+     * @return
+     * @throws Exception
+     */
+    List<TopicName> findByBrokerAndKeyword(int brokerId, String keyword) throws Exception;
+
+    /**
+     * 根据opic查询producer，consumer所有相关app
+     * @param namespace
+     * @param topicCode
+     * @return
+     */
+    Set<String> findAppsByTopic(String namespace, String topicCode);
 
 }

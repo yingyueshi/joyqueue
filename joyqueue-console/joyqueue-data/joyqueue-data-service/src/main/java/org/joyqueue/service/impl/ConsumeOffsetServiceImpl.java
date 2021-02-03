@@ -23,18 +23,21 @@ import org.joyqueue.async.RetrieveProvider;
 import org.joyqueue.async.UpdateProvider;
 import org.joyqueue.convert.CodeConverter;
 import org.joyqueue.domain.PartitionGroup;
+import org.joyqueue.model.domain.TopicPartitionGroup;
 import org.joyqueue.monitor.PartitionAckMonitorInfo;
 import org.joyqueue.monitor.PartitionLeaderAckMonitorInfo;
 import org.joyqueue.monitor.RestResponse;
+import org.joyqueue.other.HttpRestService;
 import org.joyqueue.model.domain.Broker;
+import org.joyqueue.model.domain.BrokerMonitorRecord;
 import org.joyqueue.model.domain.PartitionOffset;
 import org.joyqueue.model.domain.Subscribe;
-import org.joyqueue.other.HttpRestService;
+import com.google.common.base.Preconditions;
 import org.joyqueue.service.BrokerRestUrlMappingService;
 import org.joyqueue.service.ConsumeOffsetService;
 import org.joyqueue.service.LeaderService;
+import org.joyqueue.service.BrokerMonitorService;
 import org.joyqueue.service.TopicPartitionGroupService;
-import com.google.common.base.Preconditions;
 import org.joyqueue.toolkit.time.SystemClock;
 import org.joyqueue.util.AsyncHttpClient;
 import org.joyqueue.util.JSONParser;
@@ -47,14 +50,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import javax.annotation.Resource;
 import java.io.UnsupportedEncodingException;
-import java.util.*;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.Comparator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 /**
@@ -79,6 +86,12 @@ public class ConsumeOffsetServiceImpl implements ConsumeOffsetService {
     @Autowired
     private LeaderService leaderService;
 
+    @Autowired
+    private TopicPartitionGroupService topicPartitionGroupService;
+
+    @Autowired
+    private BrokerMonitorService brokerMonitorService;
+
 
     @Autowired
     private HttpRestService httpRestService;
@@ -92,13 +105,13 @@ public class ConsumeOffsetServiceImpl implements ConsumeOffsetService {
             @Override
             public String getKey(Broker broker, PartitionGroup partitionGroup,short partition,Subscribe condition) {
                 brokers.add(broker);
-                return broker.getIp()+":"+broker.getMonitorPort();
+                return broker.getIp()+":"+broker.getPort();
             }
 
             @Override
             public String getPath(String pathTemplate, PartitionGroup partitionGroup,short partition ,Subscribe condition) {
                 return String.format(pathTemplate, UrlEncoderUtil.encodeParam(CodeConverter.convertTopic(subscribe.getNamespace(),subscribe.getTopic()).getFullName(),
-                       CodeConverter.convertApp(subscribe.getApp(),subscribe.getSubscribeGroup())));
+                        CodeConverter.convertApp(subscribe.getApp(),subscribe.getSubscribeGroup())));
             }
         },"appConsumeOffsetMonitor","appConsumeOffsetMonitor");
         Map<String/*request key*/, String/*response*/> resultMap = brokerCluster.get(resultFuture,TIMEOUT, TimeUnit.MILLISECONDS);
@@ -122,6 +135,19 @@ public class ConsumeOffsetServiceImpl implements ConsumeOffsetService {
         for(Map.Entry<String,String> brokerPartitionOffset : brokerPartitionOffsets.entrySet()){
             restPartitionAckMonitorResponse = JSONParser.parse(brokerPartitionOffset.getValue(), RestResponse.class, PartitionAckMonitorInfo.class,true);
             partitionAckMonitorInfos.addAll(tagLeaderPartitionOffset(brokerPartitionOffset.getKey(), restPartitionAckMonitorResponse.getData(), partitionBrokers));
+        }
+        List<TopicPartitionGroup> topicPartitionGroups = topicPartitionGroupService.findByTopic(subscribe.getNamespace(), subscribe.getTopic());
+        for(TopicPartitionGroup topicPartitionGroup: topicPartitionGroups){
+            List<BrokerMonitorRecord> brokerMonitorRecordList = brokerMonitorService.findMonitorOnPartitionGroupDetailForTopicApp(subscribe, topicPartitionGroup.getGroupNo());
+            brokerMonitorRecordList.forEach(record -> {
+                for(PartitionLeaderAckMonitorInfo partitionLeaderAckMonitorInfo:partitionAckMonitorInfos){
+                    if (record.getPartition() == partitionLeaderAckMonitorInfo.getPartition()){
+                        partitionLeaderAckMonitorInfo.setTps(record.getDeQuence().getTps());
+                        partitionLeaderAckMonitorInfo.setTraffic(record.getDeQuence().getTraffic());
+                        break;
+                    }
+                }
+            });
         }
         //排序
         return partitionAckMonitorInfos.stream().sorted(Comparator.comparingInt(PartitionAckMonitorInfo::getPartition)).collect(Collectors.toList());
@@ -188,11 +214,11 @@ public class ConsumeOffsetServiceImpl implements ConsumeOffsetService {
                 String pathKey = "getTopicAppOffset";
                 RestResponse<List<PartitionAckMonitorInfo>> restResponse = httpRestService.get(pathKey, PartitionAckMonitorInfo.class, true, args);
                 if (restResponse.getData() != null) {
-                   List<PartitionLeaderAckMonitorInfo>  partitionLeaderAckMonitorInfos=tagLeaderPartitionOffset(broker.getIp()+":"+broker.getPort(),restResponse.getData(),partitionBrokers);
-                   for(PartitionLeaderAckMonitorInfo leaderAckMonitorInfo:partitionLeaderAckMonitorInfos) {
-                       if(leaderAckMonitorInfo.isLeader())
+                    List<PartitionLeaderAckMonitorInfo>  partitionLeaderAckMonitorInfos=tagLeaderPartitionOffset(broker.getIp()+":"+broker.getPort(),restResponse.getData(),partitionBrokers);
+                    for(PartitionLeaderAckMonitorInfo leaderAckMonitorInfo:partitionLeaderAckMonitorInfos) {
+                        if(leaderAckMonitorInfo.isLeader())
                             partitionAckMonitorInfos.add(leaderAckMonitorInfo);
-                   }
+                    }
                 }
             }
             return  partitionAckMonitorInfos;
@@ -244,15 +270,20 @@ public class ConsumeOffsetServiceImpl implements ConsumeOffsetService {
             @Override
             public String getKey(Broker broker, PartitionGroup partitionGroup,short partition, Subscribe condition) {
                 brokers.add(broker);
-                return broker.getIp()+":"+broker.getMonitorPort();
+                return broker.getIp()+":"+broker.getPort();
             }
         },"resetAppTopicOffsetByTime","reset consume topic Offset by time");
         Map<String/*request key*/, String/*response*/> resultMap= brokerCluster.get(resultFuture,TIMEOUT, TimeUnit.MILLISECONDS);
         if(resultMap.size()==brokers.size()){
             for(String content:resultMap.values()){
                 RestResponse<Boolean>  restResponse= JSONParser.parse(content,RestResponse.class,Boolean.class,false);
-                if(restResponse.getData()==false) {
-                   logger.info("reset by time failed,{}",restResponse.getMessage());
+                logger.info("content: {}", content);
+                if (restResponse == null || restResponse.getData() == null) {
+                    logger.error("reset by time failed, content: {}", content);
+                    return false;
+                }
+                if(!restResponse.getData()) {
+                    logger.info("reset by time failed,{}",restResponse.getMessage());
                     return false;
                 }
             }
@@ -286,6 +317,7 @@ public class ConsumeOffsetServiceImpl implements ConsumeOffsetService {
                 try {
                     put.setEntity(new StringEntity(String.valueOf(offset.getOffset())));
                 }catch (UnsupportedEncodingException e){
+                    logger.error("", e);
                     throw new IllegalStateException(e);
                 }
                 AsyncHttpClient.AsyncRequest(put, new AsyncHttpClient.ConcurrentHttpResponseHandler(url, SystemClock.now(),latch,String.valueOf(offset.getPartition()),resultMap));
@@ -296,14 +328,14 @@ public class ConsumeOffsetServiceImpl implements ConsumeOffsetService {
         }
         brokerCluster.get(new DefaultBrokerInfoFuture(latch,resultMap,"reset offset"),TIMEOUT,TimeUnit.MILLISECONDS);
         if(resultMap.size()==request){
-           for(String content:resultMap.values()){
-            RestResponse<Boolean>  restResponse=   JSONParser.parse(content,RestResponse.class,Boolean.class,false);
-            if(restResponse.getData()==false) {
-                logger.info("reset failed,{}",restResponse.getMessage());
-                return false;
+            for(String content:resultMap.values()){
+                RestResponse<Boolean>  restResponse=   JSONParser.parse(content,RestResponse.class,Boolean.class,false);
+                if(restResponse.getData()==false) {
+                    logger.info("reset failed,{}",restResponse.getMessage());
+                    return false;
+                }
             }
-           }
-           return true;
+            return true;
         }
         return false;
     }
@@ -311,10 +343,10 @@ public class ConsumeOffsetServiceImpl implements ConsumeOffsetService {
     private  Map<Short,Map.Entry<PartitionGroup,Broker>> partitionBroker(List<Map.Entry<PartitionGroup,Broker>> partitionGroupBrokers){
         Map<Short,Map.Entry<PartitionGroup,Broker>> partitionBroker=new HashMap<>();
         for(Map.Entry<PartitionGroup,Broker> e:partitionGroupBrokers){
-          Set<Short> partitions=e.getKey().getPartitions();
-          for(Short p:partitions){
-              partitionBroker.put(p,e);
-          }
+            Set<Short> partitions=e.getKey().getPartitions();
+            for(Short p:partitions){
+                partitionBroker.put(p,e);
+            }
         }
         return partitionBroker;
     }

@@ -3,6 +3,9 @@
     <layout-sider class="layout-sider" width="180px">
       <d-menu :active-name="activeName" :theme="theme" width="auto">
         <div class="layout-logo-left"></div>
+        <d-menu-item name="user" icon="radio" :size="iconSize" :to="`/${ curLang }/setting/user`"><!--color="#FFD306"-->
+          <span class="layout-text">{{ langConfig.user }}</span>
+        </d-menu-item>
         <d-menu-item name="dataCenter" icon="radio" :size="iconSize" :to="`/${ curLang }/setting/dataCenter`"><!--color="#FFD306"-->
           <span class="layout-text">{{ langConfig.dataCenter }}</span>
         </d-menu-item>
@@ -17,6 +20,9 @@
         </d-menu-item>
         <d-menu-item name="namespace" icon="feather" :size="iconSize" :to="`/${ curLang }/setting/namespace`"><!--color="#73C6B6"-->
           <span class="layout-text">{{ langConfig.namespace }}</span>
+        </d-menu-item>
+        <d-menu-item name="retryMonitor" icon="compass" :size="iconSize" :to="`/${ curLang }/setting/retryMonitor`"><!--color="#73C6B6"-->
+          <span class="layout-text">{{ langConfig.retryMonitor }}</span>
         </d-menu-item>
       </d-menu>
     </layout-sider>

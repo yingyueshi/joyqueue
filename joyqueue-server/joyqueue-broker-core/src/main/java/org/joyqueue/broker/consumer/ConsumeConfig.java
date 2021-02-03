@@ -15,6 +15,7 @@
  */
 package org.joyqueue.broker.consumer;
 
+import org.joyqueue.broker.config.BrokerConfig;
 import org.joyqueue.toolkit.config.Property;
 import org.joyqueue.toolkit.config.PropertySupplier;
 
@@ -25,9 +26,11 @@ public class ConsumeConfig {
     private static final String CONSUME_POSITION_PATH = "/position";
     private PropertySupplier propertySupplier;
     private String consumePositionPath;
+    private BrokerConfig brokerConfig;
 
     public ConsumeConfig(PropertySupplier propertySupplier) {
         this.propertySupplier = propertySupplier;
+        this.brokerConfig = new BrokerConfig(propertySupplier);
     }
 
     public String getConsumePositionPath() {
@@ -60,7 +63,47 @@ public class ConsumeConfig {
         return propertySupplier.getValue(ConsumeConfigKey.BROADCAST_INDEX_RESET_TIME);
     }
 
+    public int getRetryRate(){
+        return propertySupplier.getValue(ConsumeConfigKey.RETRY_RATE);
+    }
+
+    public int getIndexFlushInterval() {
+        return propertySupplier.getValue(ConsumeConfigKey.INDEX_FLUSH_INTERVAL);
+    }
+
+    /**
+     * Get consumer level config from
+     *
+     **/
+    public int getRetryRate(String topic,String app){
+        return PropertySupplier.getValue(propertySupplier,ConsumeConfigKey.RETRY_RATE_PREFIX.getName()+String.format("%s.%s",topic,app),
+                ConsumeConfigKey.RETRY_RATE_PREFIX.getType(),ConsumeConfigKey.RETRY_RATE_PREFIX.getValue());
+    }
+
+    public boolean getRetryForceAck(String topic, String app) {
+        return (boolean) propertySupplier.getValue(ConsumeConfigKey.RETRY_FORCE_ACK)
+                || (boolean) PropertySupplier.getValue(propertySupplier,
+                ConsumeConfigKey.RETRY_FORCE_ACK_PREFIX.getName() + String.format("%s.%s", topic, app),
+                ConsumeConfigKey.RETRY_FORCE_ACK_PREFIX.getType(),
+                ConsumeConfigKey.RETRY_FORCE_ACK_PREFIX.getValue());
+    }
+
     public void setConsumePositionPath(String consumePositionPath) {
         this.consumePositionPath = consumePositionPath;
+    }
+
+    public boolean getLogDetail(String app) {
+        return brokerConfig.getLogDetail(app);
+    }
+
+    public boolean useLegacyPartitionManager() {
+        return propertySupplier.getValue(ConsumeConfigKey.USE_LEGACY_PARTITION_MANAGER);
+    }
+    public boolean useLegacyConcurrentConsumer() {
+        return propertySupplier.getValue(ConsumeConfigKey.USE_LEGACY_CONCURRENT_CONSUMER);
+    }
+
+    public int getPartitionSelectRetryMax() {
+        return propertySupplier.getValue(ConsumeConfigKey.PARTITION_SELECT_RETRY_MAX);
     }
 }

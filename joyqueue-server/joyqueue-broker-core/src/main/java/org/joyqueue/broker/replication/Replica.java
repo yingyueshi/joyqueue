@@ -51,6 +51,8 @@ public class Replica {
 
     private ReplicateCommandState replicateCommandState;
 
+    private long lastAppendTime;
+
     Replica(int replicaId, String address) {
         this.replicaId = replicaId;
         this.address = address;
@@ -64,7 +66,7 @@ public class Replica {
         this.topicPartitionGroup = topicPartitionGroup;
     }
 
-    int replicaId() {
+    public int replicaId() {
         return replicaId;
     }
 
@@ -84,7 +86,7 @@ public class Replica {
         this.address = address;
     }
 
-    long writePosition() {
+    public long writePosition() {
         return writePosition;
     }
 
@@ -100,7 +102,7 @@ public class Replica {
         this.commitPosition = commitPosition;
     }
 
-    long nextPosition() {
+    public long nextPosition() {
         return nextPosition;
     }
 
@@ -121,7 +123,7 @@ public class Replica {
         this.lastReplicateConsumePosTime = lastReplicateConsumePosTime;
     }
 
-    long lastReplicateConsumePosTime() {
+    public long lastReplicateConsumePosTime() {
         return lastReplicateConsumePosTime;
     }
 
@@ -129,7 +131,7 @@ public class Replica {
         this.lastAppendSuccessTime = lastAppendSuccessTime;
     }
 
-    long lastAppendSuccessTime() {
+    public long lastAppendSuccessTime() {
         return lastAppendSuccessTime;
     }
 
@@ -139,6 +141,14 @@ public class Replica {
 
     public void setReplicateCommandState(ReplicateCommandState replicateCommandState) {
         this.replicateCommandState = replicateCommandState;
+    }
+
+    public long getLastAppendTime() {
+        return lastAppendTime;
+    }
+
+    public void setLastAppendTime(long lastAppendTime) {
+        this.lastAppendTime = lastAppendTime;
     }
 
     @Override

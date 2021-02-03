@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS `application` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键自增id',
   `code` varchar(128) NOT NULL COMMENT '应用 代码',
   `name` varchar(64) NOT NULL COMMENT '应用 名称',
-  `system` varchar(64) DEFAULT NULL COMMENT '所属系统',
+  `system` varchar(128) DEFAULT NULL COMMENT '所属系统',
   `department` varchar(128) DEFAULT NULL COMMENT '所属部门',
   `owner_id` bigint(20)  DEFAULT NULL COMMENT '拥有者id',
   `owner_code` varchar(64) DEFAULT NULL COMMENT '拥有者code',
@@ -39,10 +39,11 @@ CREATE TABLE IF NOT EXISTS `user` (
   `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键id',
   `code` varchar(64) NOT NULL COMMENT '用户英文名',
   `name` varchar(64) DEFAULT NULL COMMENT '用户中文名',
+  `password` varchar(128) DEFAULT NULL COMMENT '密码',
   `org_id` varchar(20) DEFAULT NULL COMMENT '组织id',
   `org_name` varchar(128) DEFAULT NULL COMMENT '组织名',
   `email` varchar(50) DEFAULT NULL COMMENT '邮箱',
-  `mobile` varchar(11) DEFAULT NULL COMMENT '手机号码',
+  `mobile` varchar(20) DEFAULT NULL COMMENT '手机号码',
   `role` tinyint(4) NOT NULL DEFAULT '0' COMMENT '权限：0 普通用户，1 管理员',
   `sign` int(11) NOT NULL DEFAULT '0' COMMENT '签名',
   `create_by` bigint(20) DEFAULT NULL COMMENT '创建人',
@@ -56,9 +57,9 @@ CREATE TABLE IF NOT EXISTS `user` (
 CREATE TABLE IF NOT EXISTS `oper_log` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `type` int(11) NOT NULL COMMENT '类型',
-  `identity` varchar(64) NOT NULL COMMENT '操作资源ID',
+  `identity` varchar(100) NOT NULL COMMENT '操作资源ID',
   `oper_type` int(11) NOT NULL COMMENT '操作类型',
-  `target` varchar(1500) DEFAULT NULL COMMENT '目标',
+  `target` varchar(1536) DEFAULT NULL COMMENT '目标',
   `result` varchar(1024) DEFAULT NULL COMMENT '操作结果，成功或异常信息',
   `description` varchar(512) DEFAULT NULL COMMENT '操作描述，url或其他',
   `create_time` datetime NOT NULL COMMENT '创建时间',
@@ -77,12 +78,15 @@ CREATE TABLE  IF NOT EXISTS `metric` (
   `type` tinyint(4) NOT NULL COMMENT '类型：0 atomic, 1 aggregator, 10 others(mdc)',
   `source` varchar(128) DEFAULT NULL COMMENT '来源指标code',
   `provider` varchar(128) DEFAULT NULL COMMENT '指标提供方',
-  `description` varchar(1000) DEFAULT NULL COMMENT '聚合描述',
+  `description` varchar(1024) DEFAULT NULL COMMENT '描述',
+  `user_permission` tinyint(4) NOT NULL DEFAULT '0' COMMENT '普通用户是否权限，0：否，1：是',
   `create_time` datetime NOT NULL COMMENT '创建时间',
   `create_by` bigint(20) NOT NULL COMMENT '创建人',
   `update_time` datetime NOT NULL COMMENT '修改时间',
   `update_by` bigint(20) NOT NULL COMMENT '修改人',
   `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '状态：-1 删除，0 禁用，1 启用',
+  `collect_interval` int(11) NOT NULL DEFAULT 1 COMMENT '采集间隔',
+  `category` varchar(128) COMMENT '指标类型: producer,consumer,broker',
   PRIMARY KEY (`id`)
 ) ENGINE = InnoDB CHARSET=utf8;
 
@@ -91,6 +95,7 @@ CREATE TABLE IF NOT EXISTS `broker_group` (
   `code` varchar(128) DEFAULT NULL COMMENT '代码',
   `name` varchar(64) DEFAULT NULL COMMENT '名称',
   `description` varchar(512) DEFAULT NULL COMMENT '描述',
+  `policies` varchar(2048) default null COMMENT '策略',
   `labels` varchar(1024) DEFAULT NULL COMMENT '标签',
   `create_time` datetime NOT NULL COMMENT '创建时间',
   `create_by` bigint(20) NOT NULL COMMENT '创建人',
@@ -130,9 +135,96 @@ CREATE TABLE IF NOT EXISTS `message_retry` (
 	`update_by` int(10) NOT NULL DEFAULT '0' COMMENT '更新人',
 	`status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '状态,0:成功,1:失败,-2:过期',
 	PRIMARY KEY (`id`)
-) ENGINE = InnoDB AUTO_INCREMENT = 0 CHARSET = utf8;
+) ENGINE = InnoDB CHARSET = utf8;
+
+CREATE TABLE IF NOT EXISTS `topic_msg_filter` (
+ `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键id',
+ `topic_code` varchar(128) NOT NULL COMMENT '主题代码',
+ `app` varchar(128) NOT NULL COMMENT '应用',
+ `token` varchar(128) NOT NULL COMMENT 'token',
+ `partition` int(11) NOT NULL default -1 COMMENT '分区',
+ `filter` varchar(128) NOT NULL COMMENT '消息过滤条件',
+ `msg_fmt` varchar(64) NOT NULL COMMENT '消息格式',
+ `offset` bigint(20) COMMENT '位点',
+ `start_time` datetime COMMENT 'offset开始时间',
+ `end_time` datetime COMMENT 'offset结束时间',
+ `query_count` int(11) default 1 NOT NULL COMMENT '查询次数',
+ `total_count` int(11) default 100000 NOT NULL COMMENT '允许查询总条数',
+ `status` tinyint(4) NOT NULL DEFAULT '0' COMMENT '状态：-1 结束，0 未执行，1 正在执行',
+ `url` varchar(512) COMMENT '任务结束后生成的s3链接,默认有7天有效时间',
+ `obj_key` varchar(128) COMMENT '如果url失效,根据obj_key重新生成url',
+ `create_time` datetime NOT NULL COMMENT '消息过滤任务创建时间',
+ `create_by` int(10) NOT NULL DEFAULT '0' COMMENT '创建人',
+ `update_time` datetime NOT NULL COMMENT '更新时间',
+ `update_by` int(10) NOT NULL DEFAULT '0' COMMENT '更新人',
+ `description` varchar(1024) NOT NULL DEFAULT '备注信息' COMMENT '备注信息',
+ PRIMARY KEY (`id`)
+) ENGINE=InnoDB CHARSET=utf8;
+
+CREATE TABLE IF NOT EXISTS `migration_task` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '自增id',
+  `src_broker_id` bigint(20) NOT NULL COMMENT '源Broker',
+  `src_broker_ip` varchar(20) NOT NULL COMMENT '源BrokerIP',
+  `remove_first` varchar(128) DEFAULT NULL COMMENT '是否先摘除，后',
+  `scope_type` varchar(128) DEFAULT  NULL COMMENT '迁移范围类型',
+  `scopes` varchar(2048) DEFAULT NULL COMMENT '迁移范围',
+  `update_by` bigint(20) DEFAULT '0' COMMENT '修改人',
+  `update_time` datetime NOT NULL COMMENT '记录更新时间',
+  `create_by` bigint(20) DEFAULT '0' COMMENT '创建人',
+  `create_time` datetime NOT NULL COMMENT '记录创建时间',
+  `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '状态：-1 删除，0 禁用，1 启用',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='Broker迁移表';
+
+CREATE TABLE IF NOT EXISTS `migration_target` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '自增id',
+  `migration_id` bigint(20) NOT NULL COMMENT 'Broker迁移任务id',
+  `broker_id` bigint(20) NOT NULL COMMENT '目标Broker',
+  `broker_ip` varchar(20) NOT NULL COMMENT '目标BrokerIP',
+  `weight` tinyint(2) DEFAULT 1 COMMENT '权重',
+  `update_by` bigint(20) DEFAULT '0' COMMENT '修改人',
+  `update_time` datetime NOT NULL COMMENT '记录更新时间',
+  `create_by` bigint(20) DEFAULT '0' COMMENT '创建人',
+  `create_time` datetime NOT NULL COMMENT '记录创建时间',
+  `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '状态：-1 删除，0 禁用，1 启用',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='Broker迁移目标表';
+
+CREATE TABLE IF NOT EXISTS `migration_subjob` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键自增id',
+  `migration_id` bigint(20) NOT NULL COMMENT 'Broker迁移任务id',
+  `topic_code` varchar(128) NOT NULL COMMENT '主题code',
+  `namespace_code` varchar(128) NOT NULL COMMENT '命名空间',
+  `pg_no` int(11) NOT NULL COMMENT '主题分区组号',
+  `src_broker_id` bigint(20) NOT NULL COMMENT '复制源头broker',
+  `tgt_broker_id` bigint(20) NOT NULL COMMENT '复制目标broker',
+  `executor` varchar(20) DEFAULT NULL COMMENT '任务执行分配器',
+  `status` TINYINT(4) DEFAULT NULL COMMENT '状态： 0 新建，1 已派发，2 执行中 3 执行成功 4 执行失败 6 重试',
+  `version` int(20) DEFAULT NULL COMMENT '更新版本号',
+  `create_by` BIGINT(20) DEFAULT NULL COMMENT '创建人',
+  `create_time` DATETIME DEFAULT NULL COMMENT '创建时间',
+  `update_by` BIGINT(20) DEFAULT NULL COMMENT '更新人',
+  `update_time` DATETIME DEFAULT NULL COMMENT '更新时间',
+  `exception` varchar(2048) DEFAULT NULL COMMENT '迁移错误日志',
+  PRIMARY KEY (`id`)
+) ENGINE = InnoDB AUTO_INCREMENT = 1000 DEFAULT CHARSET = utf8 COMMENT = 'Broker迁移子任务';
+
+CREATE TABLE IF NOT EXISTS `migration_report` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '自增id',
+  `migration_id` bigint(20) NOT NULL COMMENT 'Broker迁移任务id',
+  `type` varchar(64) NOT NULL COMMENT '类型',
+  `topic_code` varchar(128) NOT NULL COMMENT '主题code',
+  `namespace_code` varchar(128) NOT NULL COMMENT '命名空间',
+  `pg_no` int(11) NOT NULL COMMENT '主题分区组号',
+  `create_by` BIGINT(20) DEFAULT NULL COMMENT '创建人',
+  `create_time` DATETIME DEFAULT NULL COMMENT '创建时间',
+  `update_by` BIGINT(20) DEFAULT NULL COMMENT '更新人',
+  `update_time` DATETIME DEFAULT NULL COMMENT '更新时间',
+  `status` TINYINT(4) DEFAULT NULL COMMENT '状态： 0 新建，1 已派发，2 执行中 3 执行成功 4 执行失败 6 重试',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8 COMMENT='Broker评估报告表';
 
 -- init default admin USER
 MERGE INTO `user`
-(`id`, `code`, `name`, `org_id`, `org_name`, `email`, `mobile`, `role`, `sign`, `create_by`, `create_time`, `update_by`, `update_time`, `status`)
-VALUES (1, 'admin', 'Admin', NULL, NULL, NULL, NULL, 1, 0, NULL, '2019-01-01 00:00:00', -1, '2019-01-01 00:00:00', 1);
+(`id`, `code`, `name`, `password`, `org_id`, `org_name`, `email`, `mobile`, `role`, `sign`, `create_by`, `create_time`, `update_by`, `update_time`, `status`)
+VALUES (1, 'admin', 'Admin', `123456`, NULL, NULL, NULL, NULL, 1, 0, NULL, '2019-01-01 00:00:00', -1, '2019-01-01 00:00:00', 1);

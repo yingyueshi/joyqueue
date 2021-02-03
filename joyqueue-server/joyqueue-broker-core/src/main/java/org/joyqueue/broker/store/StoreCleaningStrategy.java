@@ -15,6 +15,7 @@
  */
 package org.joyqueue.broker.store;
 
+import org.joyqueue.domain.TopicConfig;
 import org.joyqueue.store.PartitionGroupStore;
 import org.joyqueue.toolkit.config.PropertySupplierAware;
 
@@ -24,7 +25,7 @@ import java.util.Map;
 /**
  * @author majun8
  */
-public interface StoreCleaningStrategy extends PropertySupplierAware {
+public interface StoreCleaningStrategy extends PropertySupplierAware, DynamicStoreConfig {
 
-    long deleteIfNeeded(PartitionGroupStore partitionGroupStore, Map<Short, Long> partitionAckMap) throws IOException;
+    long deleteIfNeeded(PartitionGroupStore partitionGroupStore, Map<Short, Long> partitionAckMap, TopicConfig topicConfig) throws IOException;
 }

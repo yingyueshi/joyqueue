@@ -19,6 +19,7 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
@@ -27,14 +28,17 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  */
 @Configuration
 @ComponentScan(value = {
+        "org.joyqueue.context",
         "org.joyqueue.nsr.impl",
         "org.joyqueue.service.impl",
         "org.joyqueue.util",
         "org.joyqueue.async",
-        "org.joyqueue.other",})
+        "org.joyqueue.other",
+        "org.joyqueue.schedule",})
 @MapperScan(basePackages = {"org.joyqueue.repository"})
 @EnableTransactionManagement
 @EnableAspectJAutoProxy(exposeProxy = true)
+@EnableScheduling
 public class ServiceAutoConfiguration {
 
 }

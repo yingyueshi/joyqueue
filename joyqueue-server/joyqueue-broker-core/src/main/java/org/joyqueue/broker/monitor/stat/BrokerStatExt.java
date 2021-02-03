@@ -25,12 +25,16 @@ import java.util.Map;
  **/
 public class BrokerStatExt implements Serializable {
 
-    private BrokerStat brokerStat;
+    private transient BrokerStat brokerStat;
     private Integer brokerId;
     private Map<String/*topic*/, TopicPendingStat> topicPendingStatMap = new HashMap<>();
     private MemoryUsage heap;
     private MemoryUsage nonHeap;
     private long timeStamp;
+
+    private long archiveConsumePending;
+    private long archiveProducePending;
+    private Map<String,Long> topicArchiveProducePending;
 
     public BrokerStatExt(BrokerStat brokerStat) {
         setBrokerStat(brokerStat);
@@ -85,5 +89,29 @@ public class BrokerStatExt implements Serializable {
 
     public long getTimeStamp() {
         return timeStamp;
+    }
+
+    public long getArchiveConsumePending() {
+        return archiveConsumePending;
+    }
+
+    public void setArchiveConsumePending(long archiveConsumePending) {
+        this.archiveConsumePending = archiveConsumePending;
+    }
+
+    public long getArchiveProducePending() {
+        return archiveProducePending;
+    }
+
+    public void setArchiveProducePending(long archiveProducePending) {
+        this.archiveProducePending = archiveProducePending;
+    }
+
+    public Map<String, Long> getTopicArchiveProducePending() {
+        return topicArchiveProducePending;
+    }
+
+    public void setTopicArchiveProducePending(Map<String, Long> topicArchiveProducePending) {
+        this.topicArchiveProducePending = topicArchiveProducePending;
     }
 }

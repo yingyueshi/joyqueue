@@ -15,21 +15,28 @@
  */
 package org.joyqueue.broker.archive;
 
+import com.google.common.base.Preconditions;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.io.FileUtils;
+import org.joyqueue.broker.BrokerContext;
 import org.joyqueue.broker.Plugins;
 import org.joyqueue.broker.cluster.ClusterManager;
+import org.joyqueue.broker.limit.RateLimiter;
+import org.joyqueue.broker.limit.SubscribeRateLimiter;
+import org.joyqueue.domain.Subscription;
 import org.joyqueue.exception.JoyQueueException;
 import org.joyqueue.message.MessageLocation;
+import org.joyqueue.monitor.PointTracer;
+import org.joyqueue.monitor.TraceStat;
 import org.joyqueue.network.session.Connection;
 import org.joyqueue.server.archive.store.api.ArchiveStore;
 import org.joyqueue.server.archive.store.model.ConsumeLog;
+import org.joyqueue.server.archive.store.utils.ArchiveSerializer;
 import org.joyqueue.toolkit.concurrent.LoopThread;
 import org.joyqueue.toolkit.lang.Close;
-import com.google.common.base.Preconditions;
 import org.joyqueue.toolkit.security.Md5;
 import org.joyqueue.toolkit.service.Service;
 import org.joyqueue.toolkit.time.SystemClock;
-import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,11 +48,7 @@ import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -65,6 +68,7 @@ public class ConsumeArchiveService extends Service {
     private ClusterManager clusterManager;
     // 归档日志
     private ArchiveConfig archiveConfig;
+    private BrokerContext brokerContext;
 
     // 统计当前读取的字节数，用于异常回滚
     private AtomicInteger readByteCounter;
@@ -75,9 +79,21 @@ public class ConsumeArchiveService extends Service {
     // 负责删除已经归档本地文件
     private LoopThread cleanConsumeLogFileThread;
 
+    private PointTracer tracer;
+
+    // 归档限流器
+    private SubscribeRateLimiter rateLimiterManager;
+
     public ConsumeArchiveService(ArchiveConfig archiveConfig, ClusterManager clusterManager) {
         this.clusterManager = clusterManager;
         this.archiveConfig = archiveConfig;
+    }
+
+    public ConsumeArchiveService(ArchiveConfig archiveConfig, BrokerContext brokerContext, SubscribeRateLimiter rateLimiter) {
+        this.archiveConfig = archiveConfig;
+        this.brokerContext = brokerContext;
+        this.clusterManager = brokerContext.getClusterManager();
+        this.rateLimiterManager = rateLimiter;
     }
 
     @Override
@@ -94,21 +110,27 @@ public class ConsumeArchiveService extends Service {
         this.repository = new ArchiveMappedFileRepository(archiveConfig.getArchivePath());
         this.readByteCounter = new AtomicInteger(0);
 
+        this.tracer = Plugins.TRACERERVICE.get(archiveConfig.getTracerType());
         this.readConsumeLogThread = LoopThread.builder()
-                .sleepTime(0, 10)
+                .sleepTime(1, 10)
                 .name("ReadAndPutHBase-ConsumeLog-Thread")
+                .daemon(true)
                 .onException(e -> {
-                    logger.error(e.getMessage(), e);
+                    logger.error("ReadAndPutHBase-readAndWrite error, happened consume log [{}], error position [{}], error length [{}], rollback position [{}], exception {}, {}",
+                            repository.rFile.getName(), repository.rMap, readByteCounter.get(), repository.rMap.position() - readByteCounter.get(), e.getMessage(), e);
                     repository.rollBack(readByteCounter.get());
-                    logger.info("finish rollback.");
+                    /*logger.info("Consume-archive: finish rollback consume log [{}], rollback position [{}], rollback length [{}].",
+                            repository.rFile.getName(), repository.rMap, readByteCounter.get());*/
+                    readByteCounter.set(0);
                 })
                 .doWork(this::readAndWrite)
                 .build();
 
         this.cleanConsumeLogFileThread = LoopThread.builder()
-                .sleepTime(1000 * 10, 1000 * 10)
+                .sleepTime(1000, 1000 * 10)
                 .name("CleanArchiveFile-ConsumeLog-Thread")
-                .onException(e -> logger.error(e.getMessage(), e))
+                .daemon(true)
+                .onException(e -> logger.error("CleanArchiveFile-cleanAndRollWriteFile error: {}, {}", e.getMessage(), e))
                 .doWork(this::cleanAndRollWriteFile)
                 .build();
     }
@@ -120,6 +142,7 @@ public class ConsumeArchiveService extends Service {
         archiveStore.start();
         readConsumeLogThread.start();
         cleanConsumeLogFileThread.start();
+        logger.info("Consume-archive: service started.");
     }
 
 
@@ -130,44 +153,67 @@ public class ConsumeArchiveService extends Service {
         Close.close(cleanConsumeLogFileThread);
         Close.close(repository);
         Close.close(archiveStore);
+        logger.info("Consume-archive: service stopped.");
     }
 
     /**
      * 读本地文件写归档存储服务
      */
-    private void readAndWrite() throws JoyQueueException, InterruptedException {
+    public void readAndWrite() throws JoyQueueException, InterruptedException {
         // 读信息，一次读指定条数
-        List<ConsumeLog> list = readConsumeLog(archiveConfig.getConsumeBatchNum());
-        if (list.size() > 0) {
-            long startTime = SystemClock.now();
+        int readBatchSize;
+        int batchSize=archiveConfig.getConsumeBatchNum();
+        do {
+            List<ConsumeLog> list = readConsumeLog(batchSize);
+            readBatchSize=list.size();
+            if (readBatchSize > 0) {
+                long startTime = SystemClock.now();
 
-            // 调用存储接口写数据
-            archiveStore.putConsumeLog(list);
+                int count = archiveConfig.getStoreFialedRetryCount();
+                do {
+                    try {
+                        // 调用存储接口写数据
+                        archiveStore.putConsumeLog(list, tracer);
+                        break;
+                    } catch (JoyQueueException e) {
+                        logger.error(String.format(
+                                "Consume-archive: store failed for consume logs, exception size: %s, root cause: %s, cause stack: %s",
+                                list.size(), e.getMessage(), e.getCause()), e);
+                        if (--count == 0) {
+                            throw e;
+                        }
+                        Thread.sleep(new Random().nextInt(count) * 1000);
+                    }
+                } while (count > 0);
 
-            long endTime = SystemClock.now();
+                long endTime = SystemClock.now();
 
-            logger.debug("Write consumeLogs size:{} to archive store, and elapsed time {}ms", list.size(), endTime - startTime);
+                if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+                    logger.info("Consume-archive: write consumeLogs size: {} to archive store, and elapsed time {}ms", list.size(), endTime - startTime);
+                }
 
-            int consumeWriteDelay = archiveConfig.getConsumeWriteDelay();
-            if (consumeWriteDelay > 0) {
-                Thread.sleep(consumeWriteDelay);
-            }
+                int consumeWriteDelay = archiveConfig.getConsumeWriteDelay();
+                if (consumeWriteDelay > 0) {
+                    Thread.sleep(consumeWriteDelay);
+                }
 
-        } else {
-            if (repository.rFile != null && repository.rMap != null) {
-                logger.debug("read file name {}, read position {}", repository.rFile.getName(), repository.rMap.toString() );
             } else {
-                logger.debug("read file is null.");
+                if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+                    if (repository.rFile != null && repository.rMap != null) {
+                        logger.info("Consume-archive: read consume log file {}, read position {}", repository.rFile.getName(), repository.rMap.toString());
+                    } else {
+                        logger.info("Consume-archive: read consume log file is null.");
+                    }
+                }
+                break;
             }
-
-            Thread.sleep(100);
-        }
+        }while(readBatchSize==batchSize);
     }
 
     private void cleanAndRollWriteFile() {
         // 删除已归档文件
         repository.delArchivedFile();
-        // 5分钟滚动生成一个新的写文件，旧文件可归档
+        // 1天滚动生成一个新的写文件，旧文件可归档
         repository.tryFinishCurWriteFile();
     }
 
@@ -182,6 +228,9 @@ public class ConsumeArchiveService extends Service {
         readByteCounter.set(0);
 
         List<ConsumeLog> list = new LinkedList<>();
+        if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+            logger.info("Consume-archive: begin to read consume log batch: {}", count);
+        }
         for (int i = 0; i < count; i++) {
             byte[] bytes = repository.readOne();
             // 读到结尾会返回byte[0]
@@ -189,10 +238,13 @@ public class ConsumeArchiveService extends Service {
                 // 1个字节开始符号，4个字节int类型长度信息
                 readByteCounter.addAndGet(1 + 4 + bytes.length);
                 // 反序列花并放入集合
-                list.add(ArchiveSerializer.read(ByteBuffer.wrap(bytes)));
+                list.add(ArchiveSerializer.ConsumeArchiveSerializer.readConsumeLog(ByteBuffer.wrap(bytes)));
             } else {
                 break;
             }
+        }
+        if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+            logger.info("Consume-archive: end to read consume log size: {}", list.size());
         }
         return list;
     }
@@ -203,6 +255,9 @@ public class ConsumeArchiveService extends Service {
      * @return
      */
     public long getRemainConsumeLogFileNum() {
+        if (!archiveConfig.isReamingEnable()) {
+            return 0;
+        }
         int localFileNum = repository.getLocalFileNum();
         return (long) localFileNum * repository.getPageSize();
     }
@@ -216,16 +271,38 @@ public class ConsumeArchiveService extends Service {
     public void appendConsumeLog(Connection connection, MessageLocation[] locations) throws JoyQueueException {
         if (!isStarted()) {
             // 没有启动消费归档服务，添加消费日志
-            logger.debug("ConsumeArchiveService not be started.");
+            logger.warn("ConsumeArchiveService not be started.");
             return;
         }
-        List<ConsumeLog> logList = convert(connection, locations);
-        logList.stream().forEach(log -> {
-            // 序列化
-            ByteBuffer buffer = ArchiveSerializer.write(log);
-            appendLog(buffer);
-            ArchiveSerializer.release(buffer);
-        });
+        if (locations != null && locations.length > 0) {
+            if (checkRateLimitAvailable(connection, locations)) {
+                TraceStat stat = tracer.begin("org.joyqueue.server.archive.consume.appendConsumeLog");
+                List<ConsumeLog> logList = convert(connection, locations);
+                logList.forEach(log -> {
+                    // 序列化
+                    ByteBuffer buffer = ArchiveSerializer.ConsumeArchiveSerializer.writeConsumeLog(log);
+                    appendLog(buffer);
+                    ArchiveSerializer.release(buffer);
+                });
+                tracer.end(stat);
+            } else {
+                TraceStat limitBroker = tracer.begin("archive.consume.rate.limited");
+                TraceStat limitTopic = tracer.begin(String.format("archive.consume.rate.limited.%s.%s", locations[0].getTopic(), connection.getApp()));
+                if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+                    logger.warn("Consume-archive: trigger rate limited topic: {}, app: {}", locations[0].getTopic(), connection.getApp());
+                }
+                tracer.end(limitBroker);
+                tracer.end(limitTopic);
+            }
+        }
+    }
+
+    private boolean checkRateLimitAvailable(Connection connection, MessageLocation[] locations) {
+        RateLimiter rateLimiter = rateLimiterManager.getOrCreate(locations[0].getTopic(), connection.getApp(), Subscription.Type.CONSUMPTION);
+        if (rateLimiter == null || rateLimiter.tryAcquireTps(locations.length)) {
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -265,7 +342,7 @@ public class ConsumeArchiveService extends Service {
         try {
             messageIdBytes = Md5.INSTANCE.encrypt(messageId.getBytes(), null);
         } catch (GeneralSecurityException e) {
-            logger.error("topic:{}, partition:{}, index:{}, exception:{}", location.getTopic(), location.getPartition(), location.getIndex(), e);
+            logger.error("Consume-archive: build consume log messageId error, topic:{}, partition:{}, index:{}, exception:{}", location.getTopic(), location.getPartition(), location.getIndex(), e);
         }
         return messageIdBytes;
     }
@@ -282,7 +359,7 @@ public class ConsumeArchiveService extends Service {
     /**
      * 本地日志日志文件存储
      */
-    static class ArchiveMappedFileRepository implements Closeable {
+    class ArchiveMappedFileRepository implements Closeable {
         // 消费归档文件本地根存储路径
         private String baseDir;
 
@@ -298,6 +375,7 @@ public class ConsumeArchiveService extends Service {
 
         // 读文件
         private File rFile;
+        private File previousCloseReadFile;
         // 读文件的Mapped
         private MappedByteBuffer rMap;
         // 随机读文件
@@ -354,13 +432,14 @@ public class ConsumeArchiveService extends Service {
          * @param buffer
          */
         public synchronized void append(ByteBuffer buffer) {
-            position += buffer.limit();
+            //position += buffer.limit();
             // 首次创建文件
             if (rwMap == null) {
                 newMappedRWFile();
+                // may notify reader
                 position = 0;
                 append(buffer);
-            } else if (1 + position >= pageSize) {
+            } else if ((position + 1 + buffer.limit()) >= pageSize) {
                 // 一个文件结束时（1个字节记录开始记录 + 记录长度） 小于 文件长度
                 rwMap.put(Byte.MAX_VALUE);
                 rwMap = null;
@@ -368,15 +447,15 @@ public class ConsumeArchiveService extends Service {
             } else {
                 // buffer 为空时直接返回
                 if (buffer.limit() == 0) {
-                    logger.debug("append buffer limit is zero.");
+                    logger.warn("Consume-archive: append buffer limit is zero.");
                     return;
                 }
                 // 先写一个开始标记
                 rwMap.put(Byte.MIN_VALUE);
-                // 记录一个标示位占用长度
-                position += 1;
                 // 写入记录内容
                 rwMap.put(buffer);
+                // 记录一个标示位占用长度
+                position += 1 + buffer.limit();
             }
         }
 
@@ -401,7 +480,7 @@ public class ConsumeArchiveService extends Service {
                 rwFileChannel = rwRaf.getChannel();
                 rwMap = rwFileChannel.map(FileChannel.MapMode.READ_WRITE, 0, pageSize);
             } catch (Exception ex) {
-                logger.error("create and mapped file error.", ex);
+                logger.error("Consume-archive: create and mapped file error.", ex);
             }
         }
 
@@ -433,21 +512,21 @@ public class ConsumeArchiveService extends Service {
                 }
             }
             // 检查一条消费日志开始标记
-            if (checkStartFlag(rMap)) {
+            if (checkPositionReadable(rMap)) {
                 int msgLen = rMap.getInt();
                 byte[] bytes = new byte[msgLen];
                 rMap.get(bytes);
 
                 return bytes;
             } else if (checkFileEndFlag(rMap)) {
-                logger.debug("Finish reading the file {}.{}", rFile, rMap.toString());
+                if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+                    logger.info("Consume-archive: finish read consume log file: {}, position: {}", rFile, rMap.toString());
+                }
 
-                // 换文件
-                if (nextFile() != null) {
-                    // 映射新文件
-                    mappedReadOnlyFile();
-                    // 继续读取消息
-                    return readOne();
+                try {
+                    closeCurrentReadFile();
+                } catch (IOException e) {
+                    logger.error("Consume-archive: close current consume log archive file: {}, error: {}", rFile, e);
                 }
             }
             return new byte[0];
@@ -467,6 +546,20 @@ public class ConsumeArchiveService extends Service {
                 }
             }
             return false;
+        }
+
+        private boolean checkPositionReadable(MappedByteBuffer rMap) {
+            if (rwFile == null || !rwFile.exists()) {
+                return checkStartFlag(rMap);
+            }
+            if (rwFile.getName().equals(rFile.getName())) {
+                if (rMap.position() < position) {
+                    return checkStartFlag(rMap);
+                } else {
+                    return false;
+                }
+            }
+            return checkStartFlag(rMap);
         }
 
         /**
@@ -491,10 +584,16 @@ public class ConsumeArchiveService extends Service {
          *
          * @param interval
          */
-        private void rollBack(int interval) {
+        public void rollBack(int interval) {
             if (rMap != null) {
                 int position = rMap.position();
                 int newPosition = position - interval;
+                if (ConsumeArchiveService.this.archiveConfig.getLogDetail(
+                        ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX,
+                                ConsumeArchiveService.this.clusterManager.getBrokerId().toString())) {
+                    logger.info("Consume-archive: read consume log rollback, position: [{}], offset: [{}], reset position: [{}]",
+                            position, interval, newPosition);
+                }
                 rMap.position(newPosition);
             }
         }
@@ -506,15 +605,47 @@ public class ConsumeArchiveService extends Service {
         @Override
         public void close() {
             try {
-                if (rFileChannel != null) rFileChannel.close();
-                if (rRaf != null) rRaf.close();
-
-                if (rwFileChannel != null) rwFileChannel.close();
-                if (rwRaf != null) rwRaf.close();
+                closeCurrentReadFile();
+                closeCurrentWriteFile();
             } catch (IOException e) {
-                logger.error("delete read file error.", e);
+                logger.error("Consume-archive: close consume log read&write files error: {}", e);
             }
         }
+
+        /**
+         * Close current read file
+         **/
+        public void closeCurrentReadFile() throws IOException {
+            if (rFileChannel != null) {
+                rFileChannel.close();
+            }
+            if (rRaf != null) {
+                rRaf.close();
+            }
+            if (rMap != null) {
+                rMap = null;
+            }
+            previousCloseReadFile = rFile;
+        }
+
+        /**
+         *
+         * Close current write file
+         *
+         **/
+
+        public void closeCurrentWriteFile() throws IOException {
+            if (rwFileChannel != null) {
+                rwFileChannel.close();
+            }
+            if (rwRaf != null) {
+                rwRaf.close();
+            }
+            if (rwMap != null) {
+                rwMap = null;
+            }
+        }
+
 
         /**
          * 找下个被读的文件
@@ -524,31 +655,33 @@ public class ConsumeArchiveService extends Service {
         private File nextFile() {
             File file = new File(baseDir);
             String[] list = file.list();
-            if (list == null || list.length == 1) {
-                logger.debug("only one write file.");
-                // 归档文件目录下的没有文件，或者文件数等于1，则表示没有可归档文件，返回null
+            if (list == null) {
+                if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+                    logger.info("Consume-archive: find no consume log files");
+                }
                 return null;
             }
 
-            logger.debug("archive file list {}", Arrays.toString(list));
+            if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+                logger.info("Consume-archive: find consume log file list: {}", Arrays.toString(list));
+            }
 
-            final String concurrentFileName = rFile == null ? "" : rFile.getName();
-            List<String> sorted = Arrays.asList(list).stream().filter(name -> name.compareTo(concurrentFileName) > 0)
+            final String previousCloseReadFileName = previousCloseReadFile == null ? "" : previousCloseReadFile.getName();
+            List<String> sorted = Arrays.stream(list).filter(name -> name.compareTo(previousCloseReadFileName) > 0)
                     .sorted(Comparator.naturalOrder()).collect(Collectors.toList());
 
-            if (sorted.size() > 1) {
-                // 未归档文件数大于1，获取第1个未归档文件
+            if (sorted.size() > 0) {
+                // 只要有一个比上一次关闭的文件新(正常情况下新生成的) 或者就只有一个文件(该文件可能因为broker重启后重新打开)
                 String fileName = sorted.get(0);
                 File tempFile = new File(baseDir + fileName);
                 rFile = tempFile;
-
+                if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+                    logger.info("Consume-archive: find earliest consume log file: {}",tempFile);
+                }
                 return rFile;
-            } else {
-                logger.debug("only one write file.");
             }
 
             return null;
-
         }
 
         /**
@@ -562,9 +695,12 @@ public class ConsumeArchiveService extends Service {
             if (list == null) {
                 return null;
             }
-            Optional<String> first = Arrays.asList(list).stream().sorted(Comparator.reverseOrder()).findFirst();
-            if (first.isPresent()) {
-                String fileName = first.get();
+            Optional<String> last = Arrays.stream(list)
+                    .map(name -> new File(baseDir + name))
+                    .filter(f -> !f.isDirectory())
+                    .map(File::getName).max(Comparator.naturalOrder());
+            if (last.isPresent()) {
+                String fileName = last.get();
                 File tempFile = new File(baseDir + fileName);
                 rwFile = tempFile;
                 return rwFile;
@@ -579,9 +715,7 @@ public class ConsumeArchiveService extends Service {
             // 遍历删除已归档文件
             List<String> archivedFileList = getArchivedFileList();
             if (CollectionUtils.isNotEmpty(archivedFileList)) {
-                archivedFileList.stream().forEach(fileName -> {
-                    new File(baseDir + fileName).delete();
-                });
+                archivedFileList.forEach(fileName -> new File(baseDir + fileName).delete());
             }
         }
 
@@ -591,19 +725,22 @@ public class ConsumeArchiveService extends Service {
          * @return
          */
         private List<String> getArchivedFileList() {
-            // 没有调用到readOne方法，不会初始化rFile，防止空指针，加一下判断
-            if (rFile == null) {
-                logger.info("Can not get archive file list cause by consume archive read file have no init.");
-                return null;
-            }
-
             File file = new File(baseDir);
             String[] list = file.list();
             if (list == null) {
                 return null;
             }
+
+            // 没有调用到readOne方法，不会初始化rFile，防止空指针，加一下判断
+            if (rFile == null) {
+                if (archiveConfig.getLogDetail(ArchiveConfig.LOG_DETAIL_CONSUME_PREFIX, clusterManager.getBrokerId().toString())) {
+                    logger.info("Consume-archive: there is no archive consume log file list cause current broker is not open archive flag.");
+                }
+                return null;
+            }
+
             // 返回已完成归档的文件集合
-            return Arrays.asList(list).stream().filter(name -> name.compareTo(rFile.getName()) < 0).collect(Collectors.toList());
+            return Arrays.stream(list).filter(name -> name.compareTo(rFile.getName()) < 0).collect(Collectors.toList());
         }
 
         /**
@@ -614,6 +751,9 @@ public class ConsumeArchiveService extends Service {
         public int getLocalFileNum() {
             File file = new File(baseDir);
             String[] list = file.list();
+            if (list == null){
+                return 0;
+            }
             return list.length;
         }
 
@@ -654,13 +794,13 @@ public class ConsumeArchiveService extends Service {
             // 5分钟滚动生成一个新的写文件
             String name = rwFile.getName();
             long now = SystemClock.now();
-            // position > 0 说明有归档记录写入文件，并且5分钟没有写满
-            if (position > 0 && now - Long.parseLong(name) >= 1000 * 60 * 1) {
+            // position > 0 说明有归档记录写入文件，并且1天没有写满
+            if (position > 0 && now - Long.parseLong(name) >= archiveConfig.getLogRetainDuration() * 1000 * 60 * 60) {
                 // 直接将当前写文件的位置设置为文件大小，下次一次append的时候会新建一个文件继续写
                 position = pageSize;
                 append(ByteBuffer.wrap(new byte[0]));
 
-                logger.info("reset write file {} position {} to pageSize.", rwFile.getName(), rwMap.toString());
+                logger.info("Consume-archive: reset write file {} position {} to pageSize.", rwFile.getName(), rwMap.toString());
             }
         }
     }

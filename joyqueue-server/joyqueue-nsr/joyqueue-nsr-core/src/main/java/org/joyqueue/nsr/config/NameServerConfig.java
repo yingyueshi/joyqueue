@@ -15,7 +15,7 @@
  */
 package org.joyqueue.nsr.config;
 
-import org.joyqueue.config.BrokerConfigKeys;
+import org.joyqueue.config.BrokerConfigKey;
 import org.joyqueue.helper.PortHelper;
 import org.joyqueue.network.transport.config.ServerConfig;
 import org.joyqueue.network.transport.config.TransportConfigSupport;
@@ -35,15 +35,19 @@ public class NameServerConfig {
     }
 
     public int getManagerPort() {
-        return PortHelper.getNameServerManagerPort(propertySupplier.getValue(BrokerConfigKeys.FRONTEND_SERVER_PORT));
+        return PortHelper.getNameServerManagerPort(propertySupplier.getValue(BrokerConfigKey.FRONTEND_SERVER_PORT));
     }
 
     public int getServicePort() {
-        return PortHelper.getNameServerPort(propertySupplier.getValue(BrokerConfigKeys.FRONTEND_SERVER_PORT));
+        return PortHelper.getNameServerPort(propertySupplier.getValue(BrokerConfigKey.FRONTEND_SERVER_PORT));
     }
 
     public boolean getCacheEnable() {
         return propertySupplier.getValue(NameServerConfigKey.NAMESERVER_CACHE_ENABLE);
+    }
+
+    public int getTopicCacheExpireTime() {
+        return propertySupplier.getValue(NameServerConfigKey.NAMESERVER_TOPIC_CACHE_EXPIRE_TIME);
     }
 
     public int getCacheExpireTime() {

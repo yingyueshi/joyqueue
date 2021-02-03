@@ -15,7 +15,7 @@
  */
 package org.joyqueue.broker.store;
 
-import org.joyqueue.broker.config.BrokerStoreConfig;
+import org.joyqueue.domain.TopicConfig;
 import org.joyqueue.store.PartitionGroupStore;
 import org.joyqueue.toolkit.config.PropertySupplier;
 import org.joyqueue.toolkit.time.SystemClock;
@@ -26,25 +26,22 @@ import java.util.Map;
 /**
  * @author majun8
  */
-public class IntervalTimeStoreCleaningStrategy implements StoreCleaningStrategy {
-    private long maxIntervalTime;
-    private boolean doNotDeleteConsumed = true;
-
+public class IntervalTimeStoreCleaningStrategy extends AbstractStoreCleaningStrategy{
     public IntervalTimeStoreCleaningStrategy() {
 
     }
 
     @Override
-    public long deleteIfNeeded(PartitionGroupStore partitionGroupStore, Map<Short, Long> partitionAckMap) throws IOException {
+    public long deleteIfNeeded(PartitionGroupStore partitionGroupStore, Map<Short, Long> partitionAckMap, TopicConfig topicConfig) throws IOException {
         long currentTimestamp = SystemClock.now();
-        long targetDeleteTimeline = currentTimestamp - maxIntervalTime;
+        long targetDeleteTimeline = currentTimestamp -storeLogMaxTime(topicConfig) ;
 
         long totalDeletedSize = 0L;  // 总共删除长度
         long deletedSize = 0L;
 
         if (partitionGroupStore != null) {
             do {
-                deletedSize = partitionGroupStore.deleteMinStoreMessages(targetDeleteTimeline, partitionAckMap, doNotDeleteConsumed);
+                deletedSize = partitionGroupStore.clean(targetDeleteTimeline, partitionAckMap, keepUnconsumed(topicConfig));
                 totalDeletedSize += deletedSize;
             } while (deletedSize > 0L);
         }
@@ -54,8 +51,6 @@ public class IntervalTimeStoreCleaningStrategy implements StoreCleaningStrategy 
 
     @Override
     public void setSupplier(PropertySupplier supplier) {
-        BrokerStoreConfig brokerStoreConfig = new BrokerStoreConfig(supplier);
-        this.maxIntervalTime = brokerStoreConfig.getMaxStoreTime();
-        this.doNotDeleteConsumed = brokerStoreConfig.getDoNotDeleteConsumed();
+        super.setSupplier(supplier);
     }
 }

@@ -18,6 +18,7 @@ package org.joyqueue.broker.kafka.handler;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import org.apache.commons.collections.CollectionUtils;
 import org.joyqueue.broker.buffer.Serializer;
 import org.joyqueue.broker.cluster.ClusterManager;
 import org.joyqueue.broker.consumer.Consume;
@@ -35,12 +36,14 @@ import org.joyqueue.broker.kafka.converter.CheckResultConverter;
 import org.joyqueue.broker.kafka.helper.KafkaClientHelper;
 import org.joyqueue.broker.kafka.message.KafkaBrokerMessage;
 import org.joyqueue.broker.kafka.message.converter.KafkaMessageConverter;
+import org.joyqueue.broker.monitor.BrokerMonitor;
 import org.joyqueue.broker.monitor.SessionManager;
 import org.joyqueue.broker.network.traffic.Traffic;
 import org.joyqueue.domain.TopicName;
 import org.joyqueue.exception.JoyQueueCode;
 import org.joyqueue.message.BrokerMessage;
 import org.joyqueue.message.SourceType;
+import org.joyqueue.network.protocol.annotation.FetchHandler;
 import org.joyqueue.network.session.Connection;
 import org.joyqueue.network.session.Consumer;
 import org.joyqueue.network.transport.Transport;
@@ -50,7 +53,6 @@ import org.joyqueue.toolkit.delay.AbstractDelayedOperation;
 import org.joyqueue.toolkit.delay.DelayedOperation;
 import org.joyqueue.toolkit.delay.DelayedOperationKey;
 import org.joyqueue.toolkit.delay.DelayedOperationManager;
-import org.apache.commons.collections.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +67,7 @@ import java.util.Map;
  * author: gaohaoxiang
  * date: 2018/11/5
  */
+@FetchHandler
 public class FetchRequestHandler extends AbstractKafkaCommandHandler implements KafkaContextAware {
 
     protected static final Logger logger = LoggerFactory.getLogger(FetchRequestHandler.class);
@@ -74,6 +77,7 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
     private ClusterManager clusterManager;
     private MessageConvertSupport messageConvertSupport;
     private SessionManager sessionManager;
+    private BrokerMonitor brokerMonitor;
     private DelayedOperationManager<DelayedOperation> delayPurgatory;
 
     @Override
@@ -83,6 +87,7 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
         this.clusterManager = kafkaContext.getBrokerContext().getClusterManager();
         this.messageConvertSupport = kafkaContext.getBrokerContext().getMessageConvertSupport();
         this.sessionManager = kafkaContext.getBrokerContext().getSessionManager();
+        this.brokerMonitor = kafkaContext.getBrokerContext().getBrokerMonitor();
         this.delayPurgatory = new DelayedOperationManager<>("kafka-fetch-delay");
         this.delayPurgatory.start();
     }
@@ -90,6 +95,7 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
     @Override
     public Command handle(Transport transport, Command request) {
         FetchRequest fetchRequest = (FetchRequest) request.getPayload();
+        Connection connection = SessionHelper.getConnection(transport);
         Map<String, List<FetchRequest.PartitionRequest>> partitionRequestMap = fetchRequest.getPartitionRequests();
         String clientId = KafkaClientHelper.parseClient(fetchRequest.getClientId());
         String clientIp = ((InetSocketAddress) transport.remoteAddress()).getHostString();
@@ -103,7 +109,6 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
             TopicName topic = TopicName.parse(entry.getKey());
             List<FetchResponse.PartitionResponse> partitionResponses = Lists.newArrayListWithCapacity(entry.getValue().size());
 
-            Connection connection = SessionHelper.getConnection(transport);
             String consumerId = connection.getConsumer(topic.getFullName(), clientId);
             Consumer consumer = sessionManager.getConsumerById(consumerId);
             org.joyqueue.domain.Consumer.ConsumerPolicy consumerPolicy = clusterManager.tryGetConsumerPolicy(topic, clientId);
@@ -111,7 +116,12 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
             for (FetchRequest.PartitionRequest partitionRequest : entry.getValue()) {
                 int partition = partitionRequest.getPartition();
 
-                if (currentBytes > maxBytes) {
+                if (consumer == null) {
+                    partitionResponses.add(new FetchResponse.PartitionResponse(partition, KafkaErrorCode.NOT_LEADER_FOR_PARTITION.getCode()));
+                    continue;
+                }
+
+                if (fetchRequest.getTraffic().isLimited(topic.getFullName()) || currentBytes > maxBytes) {
                     partitionResponses.add(new FetchResponse.PartitionResponse(partition, KafkaErrorCode.NONE.getCode()));
                     continue;
                 }
@@ -121,7 +131,6 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
                     logger.warn("checkReadable failed, transport: {}, topic: {}, partition: {}, app: {}, code: {}", transport, topic, partition, clientId, checkResult.getJoyQueueCode());
                     short errorCode = CheckResultConverter.convertFetchCode(checkResult.getJoyQueueCode());
                     partitionResponses.add(new FetchResponse.PartitionResponse(partition, errorCode));
-                    traffic.record(topic.getFullName(), 0);
                     continue;
                 }
 
@@ -131,7 +140,7 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
 
                 currentBytes += partitionResponse.getBytes();
                 partitionResponses.add(partitionResponse);
-                traffic.record(topic.getFullName(), partitionResponse.getMessages().size());
+                traffic.record(topic.getFullName(), partitionResponse.getBytes(), partitionResponse.getSize());
             }
 
             fetchPartitionResponseMap.put(entry.getKey(), partitionResponses);
@@ -139,10 +148,11 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
 
         FetchResponse fetchResponse = new FetchResponse();
         fetchResponse.setPartitionResponses(fetchPartitionResponseMap);
+        fetchResponse.setTraffic(traffic);
         Command response = new Command(fetchResponse);
 
-        // 如果当前拉取消息量小于最小限制，那么延迟响应
-        if (fetchRequest.getMinBytes() > currentBytes && fetchRequest.getMaxWait() > 0 && config.getFetchDelay()) {
+        // 如果没有被限流，并且当前拉取消息量小于最小限制，那么延迟响应
+        if (!fetchRequest.getTraffic().isLimited() && fetchRequest.getMinBytes() > currentBytes && fetchRequest.getMaxWait() > 0 && config.getFetchDelay()) {
             delayPurgatory.tryCompleteElseWatch(new AbstractDelayedOperation(fetchRequest.getMaxWait()) {
                 @Override
                 protected void onComplete() {
@@ -157,13 +167,23 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
 
     private FetchResponse.PartitionResponse fetchMessage(Transport transport, Consumer consumer, org.joyqueue.domain.Consumer.ConsumerPolicy consumerPolicy,
                                                          TopicName topic, int partition, String clientId, long offset, int maxBytes) {
-        long minIndex = consume.getMinIndex(consumer, (short) partition);
-        long maxIndex = consume.getMaxIndex(consumer, (short) partition);
 
-        if (offset < minIndex || offset > maxIndex) {
-            logger.warn("fetch message exception, index out of range, transport: {}, consumer: {}, partition: {}, offset: {}, minOffset: {}, maxOffset: {}",
-                    transport, consumer, partition, offset, minIndex, maxIndex);
-            return new FetchResponse.PartitionResponse(partition, KafkaErrorCode.OFFSET_OUT_OF_RANGE.getCode());
+
+        long minIndex = 0;
+        long maxIndex = 0;
+        try {
+            minIndex = consume.getMinIndex(consumer, (short) partition);
+            maxIndex = consume.getMaxIndex(consumer, (short) partition);
+
+            if (offset < minIndex || offset > maxIndex) {
+                logger.warn("fetch message exception, index out of range, transport: {}, consumer: {}, partition: {}, offset: {}, minOffset: {}, maxOffset: {}",
+                        transport, consumer, partition, offset, minIndex, maxIndex);
+                return new FetchResponse.PartitionResponse(partition, KafkaErrorCode.OFFSET_OUT_OF_RANGE.getCode());
+            }
+        } catch (Exception e) {
+            logger.error("fetch message exception, check index error, transport: {}, consumer: {}, partition: {}, offset: {}",
+                    transport, consumer, partition, offset, e);
+            return new FetchResponse.PartitionResponse(partition, KafkaErrorCode.NONE.getCode());
         }
 
         List<KafkaBrokerMessage> kafkaBrokerMessages = Lists.newLinkedList();
@@ -209,11 +229,6 @@ public class FetchRequestHandler extends AbstractKafkaCommandHandler implements 
                 logger.error("fetch message exception, consumer: {}, partition: {}, offset: {}, batchSize: {}", consumer, partition, offset, batchSize, e);
                 break;
             }
-        }
-
-        if (config.getLogDetail(clientId)) {
-            logger.info("fetch message, transport: {}, app: {}, partition: {}, offset: {}, result: {}",
-                    transport, clientId, partition, offset, kafkaBrokerMessages.size());
         }
 
         FetchResponse.PartitionResponse fetchResponsePartitionData = new FetchResponse.PartitionResponse(partition, KafkaErrorCode.NONE.getCode(), kafkaBrokerMessages);

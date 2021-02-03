@@ -70,6 +70,8 @@ public class Topic extends BaseNsrModel {
 
     private String labels;
 
+    private List<String> dataCenters;
+
     private Namespace namespace = new Namespace(DEFAULT_NAMESPACE_ID, DEFAULT_NAMESPACE_CODE);
 
 //    private List<BrokerGroup> brokerGroups;
@@ -85,6 +87,8 @@ public class Topic extends BaseNsrModel {
      * 副本数量(默认3个，表示主+从，总共3个)
      */
     private int replica = 3;
+
+    private org.joyqueue.domain.Topic.TopicPolicy policy;
 
     public Topic() {
 
@@ -202,5 +206,39 @@ public class Topic extends BaseNsrModel {
 
     public void setReplica(int replica) {
         this.replica = replica;
+    }
+
+    public List<String> getDataCenters() {
+        return dataCenters;
+    }
+
+    public void setDataCenters(List<String> dataCenters) {
+        this.dataCenters = dataCenters;
+    }
+
+    public org.joyqueue.domain.Topic.TopicPolicy getPolicy() {
+        return policy;
+    }
+
+    public void setPolicy(org.joyqueue.domain.Topic.TopicPolicy policy) {
+        this.policy = policy;
+    }
+
+    @Override
+    public String toString() {
+        return "Topic{" +
+                "name='" + name + '\'' +
+                ", code='" + code + '\'' +
+                ", partitions=" + partitions +
+                ", archive=" + archive +
+                ", type=" + type +
+                ", electType=" + electType +
+                ", labels='" + labels + '\'' +
+                ", namespace=" + namespace +
+                ", brokerGroup=" + brokerGroup +
+                ", brokers=" + brokers +
+                ", brokerNum=" + brokerNum +
+                ", replica=" + replica +
+                '}';
     }
 }

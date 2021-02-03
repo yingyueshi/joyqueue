@@ -71,6 +71,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 
 @Service("openAPIService")
@@ -323,21 +324,25 @@ public class OpenAPIServiceImpl implements OpenAPIService {
     public Topic createTopic(Topic topic, QBrokerGroup brokerGroup, Identity operator) throws Exception {
 //        topic.setElectType(PartitionGroup.ElectType.raft);
         List<Broker> brokers = allocateBrokers(topic, brokerGroup);
-        if (brokers.size() == 0) {
-            throw new ServiceException(ServiceException.BAD_REQUEST, "select broker is empty");
-        }
-
-        //计算总数
-        topic.setPartitions(topic.getPartitions() * brokers.size());
-        topic.setBrokers(brokers);
-        topicService.addWithBrokerGroup(topic, topic.getBrokerGroup(), topic.getBrokers(), operator);
-        return topicService.findById(topic.getId());
+        return createTopic(topic,brokers,operator);
     }
 
+    @Override
+    public Topic createTopic(Topic topic, List<Broker> select, Identity operator) throws Exception {
+        if(Objects.isNull(select)||select.size()==0){
+            throw new ServiceException(ServiceException.BAD_REQUEST, "select broker is empty");
+        }
+        //计算总数
+        topic.setPartitions(topic.getPartitions() * select.size());
+        topic.setBrokers(select);
+        topicService.addWithBrokerGroup(topic);
+        return topicService.findById(topic.getId());    }
+
+    @Override
     public void removeTopic(String namespace, String topicCode) throws Exception {
         Topic topic = topicService.findByCode(namespace, topicCode);
         if (topic == null) {
-            throw new BusinessException("topic is not exist");
+            throw new BusinessException("topic does not exist");
         }
         topicService.delete(topic);
     }
@@ -488,6 +493,11 @@ public class OpenAPIServiceImpl implements OpenAPIService {
             throw new ServiceException(ServiceException.INTERNAL_SERVER_ERROR, e.getMessage());
         }
 
+    }
+
+    @Override
+    public BrokerMonitorRecord brokerMonitor(Subscribe subscribe, boolean active) {
+        return brokerMonitorService.find(subscribe, active);
     }
 
     /**

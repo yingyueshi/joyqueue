@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.joyqueue.repository.MigrationTargetRepository">
+
+	<resultMap id="baseResultMap" type="MigrationTarget">
+		<result property="id" column="id" jdbcType="BIGINT"/>
+		<result property="migrationId" column="migration_id" jdbcType="BIGINT"/>
+		<result property="brokerId" column="broker_id" jdbcType="BIGINT"/>
+		<result property="weight" column="weight" jdbcType="TINYINT"/>
+		<result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
+		<result property="createBy.id" column="create_by" jdbcType="BIGINT"/>
+		<result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
+		<result property="updateBy.id" column="update_by" jdbcType="BIGINT"/>
+		<result property="status" column="status" jdbcType="TINYINT"/>
+	</resultMap>
+
+    <insert id="add" useGeneratedKeys="true" keyProperty="id" parameterType="MigrationTarget">
+       <![CDATA[
+          INSERT INTO migration_target(
+            migration_id,
+            broker_id,
+            weight,
+            `create_time`,
+            create_by,
+            update_time,
+            update_by,
+            status
+            )
+          VALUES(
+            #{migrationId},
+            #{brokerId},
+            #{weight},
+            #{createTime},
+            #{createBy.id},
+            #{updateTime},
+            #{updateBy.id},
+            #{status}
+            )
+       ]]>
+	</insert>
+    <update id="update" parameterType="MigrationTarget">
+	 <![CDATA[
+        UPDATE
+            migration_target
+        SET
+           `migration_id` = #{migrationId},
+           `broker_id` = #{brokerId},
+           `weight` = #{weight},
+           `update_by`=#{updateBy.id},
+           `update_time`=#{updateTime}
+        WHERE
+            id=#{id}
+        ]]>
+	</update>
+
+    <update id="delete" parameterType="MigrationTarget">
+    <![CDATA[
+        UPDATE
+            migration_target
+        SET
+            update_by=#{updateBy.id},
+            update_time=#{updateTime},
+            status=-1
+        WHERE
+            id=#{id}
+        ]]>
+	</update>
+
+    <sql id="baseColumn">
+       SELECT
+		t.id,
+		t.migration_id,
+		t.broker_id,
+		t.weight,
+		t.create_time,
+		t.create_by,
+		t.update_time,
+		t.update_by,
+		t.status
+	</sql>
+
+    <select id="findById" parameterType="long" resultMap="baseResultMap">
+        <include refid="baseColumn"/>
+		FROM migration_target AS t
+		WHERE t.id=#{id}
+    </select>
+
+	<select id="findByMigrationId" parameterType="long" resultMap="baseResultMap">
+		<include refid="baseColumn"/>
+		FROM migration_target AS t
+		WHERE t.migration_id=#{migrationId}
+	</select>
+
+    <update id="state" parameterType="MigrationTarget">
+        <![CDATA[
+        UPDATE
+            migration_target
+        SET
+           `status`=#{status},
+           `update_by`=#{updateBy.id},
+           `update_time`=#{updateTime}
+        WHERE
+            id=#{id}
+        ]]>
+    </update>
+</mapper>

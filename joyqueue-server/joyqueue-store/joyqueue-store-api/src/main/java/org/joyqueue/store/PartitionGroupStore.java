@@ -49,7 +49,15 @@ public interface PartitionGroupStore {
      */
     long getTotalPhysicalStorageSize();
 
-    long deleteMinStoreMessages(long targetDeleteTimeline, Map<Short, Long> partitionAckMap, boolean doNotDeleteConsumed) throws IOException;
+    /**
+     * @param time  delete oldest index file of partition if
+     *              exist at least two consumed index file and it's oldest message time < time,
+     *              force clean oldest consumed index file when time < 0
+     * @param partitionAckMap  partition consume ack offsets
+     * @param keepUnconsumed  do not delete unconsumed
+     * @return  release storage size
+     **/
+    long clean(long time, Map<Short, Long> partitionAckMap, boolean keepUnconsumed) throws IOException;
 
     /**
      * 获取分区当前的最小索引，用于初始化消费
@@ -59,11 +67,25 @@ public interface PartitionGroupStore {
     long getLeftIndex(short partition);
 
     /**
+     * 获取分区当前的最小索引，并确认存储状态
+     * @param partition 分区
+     * @return 返回值小于0时表示分区不存在，否则返回分区最大索引
+     */
+    long getLeftIndexAndCheck(short partition);
+
+    /**
      * 获取分区当前的最大索引，用于初始化消费
      * @param partition 分区
      * @return 返回值小于0时表示分区不存在，否则返回分区最大索引
      */
     long getRightIndex(short partition);
+
+    /**
+     * 获取分区当前的最大索引，并确认状态
+     * @param partition 分区
+     * @return 返回值小于0时表示分区不存在，否则返回分区最大索引
+     */
+    long getRightIndexAndCheck(short partition);
 
     /**
      * 根据消息存储时间获取索引。

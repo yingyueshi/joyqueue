@@ -19,6 +19,7 @@ import org.joyqueue.model.domain.nsr.BaseNsrModel;
 
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
+import java.util.Map;
 
 public class ConsumerConfig extends BaseNsrModel {
     /**
@@ -29,28 +30,28 @@ public class ConsumerConfig extends BaseNsrModel {
     /**
      * 开启就近机房消费
      **/
-    private boolean nearBy;
+    private Boolean nearBy = false;
 
     /**
      * 是否暂停消费
      **/
-    private boolean paused;
+    private Boolean paused = false;
 
     /**
      * 是否需要归档,默认不归档
      **/
-    private boolean archive;
+    private Boolean archive = false;
 
     /**
      * 是否启用重试服务，默认开启
      **/
-    private boolean retry = true;
+    private Boolean retry = true;
 
     /**
      * 延迟时间,最大延迟1小时
      */
     @Max(3600000)
-    private int delay = 0;
+    private Integer delay = 0;
 
     /**
      * 偏移量管理类型
@@ -61,54 +62,56 @@ public class ConsumerConfig extends BaseNsrModel {
      * 应答超时时间，默认2min
      */
     @Min(0)
-    private int ackTimeout = 120000;
+    private Integer ackTimeout = 120000;
 
     /**
      * 批量大小,默认10
      **/
     @Min(0)
     @Max(127)
-    private int batchSize = 10;
+    private Integer batchSize = 10;
 
     /**
      * 最大重试次数(无限制)
      **/
     @Min(0)
-    private int maxRetrys;
+    private Integer maxRetrys = 0;
 
     /**
      * 最大重试间隔(默认5分钟)
      **/
     @Min(0)
-    private int maxRetryDelay;
+    private Integer maxRetryDelay = 0;
 
     /**
      * 重试间隔
      */
     @Min(0)
-    private int retryDelay;
+    private Integer retryDelay = 0;
+
+    private String region;
 
     /**
      * 指数增加间隔时间
      **/
-    private boolean useExponentialBackOff = true;
+    private Boolean useExponentialBackOff = true;
 
     /**
      * 指数系数
      */
     @Min(0)
-    private double backOffMultiplier;
+    private Double backOffMultiplier = 0D;
 
     /**
      * 过期时间（默认3天）
      **/
     @Min(0)
-    private int expireTime;
+    private Integer expireTime = 0;
 
     /**
      * 单队列并行度
      **/
-    private int concurrent = 1;
+    private Integer concurrent = 1;
 
     /**
      * 黑名单
@@ -117,16 +120,18 @@ public class ConsumerConfig extends BaseNsrModel {
 
     private String filters;
 
-    private int limitTps;
+    private Integer limitTps = 0;
 
-    private int limitTraffic;
+    private Integer limitTraffic = 0;
+
+    private Map<String, String> params;
 
 
-    public boolean isNearBy() {
+    public Boolean isNearBy() {
         return nearBy;
     }
 
-    public void setNearBy(boolean nearBy) {
+    public void setNearBy(Boolean nearBy) {
         this.nearBy = nearBy;
     }
 
@@ -138,107 +143,107 @@ public class ConsumerConfig extends BaseNsrModel {
         this.consumerId = consumerId;
     }
 
-    public boolean isPaused() {
+    public Boolean isPaused() {
         return paused;
     }
 
-    public void setPaused(boolean paused) {
+    public void setPaused(Boolean paused) {
         this.paused = paused;
     }
 
-    public boolean isArchive() {
+    public Boolean isArchive() {
         return archive;
     }
 
-    public void setArchive(boolean archive) {
+    public void setArchive(Boolean archive) {
         this.archive = archive;
     }
 
-    public boolean isRetry() {
+    public Boolean isRetry() {
         return retry;
     }
 
-    public void setRetry(boolean retry) {
+    public void setRetry(Boolean retry) {
         this.retry = retry;
     }
 
-    public int getDelay() {
+    public Integer getDelay() {
         return delay;
     }
 
-    public void setDelay(int delay) {
+    public void setDelay(Integer delay) {
         this.delay = delay;
     }
 
-    public int getAckTimeout() {
+    public Integer getAckTimeout() {
         return ackTimeout;
     }
 
-    public void setAckTimeout(int ackTimeout) {
+    public void setAckTimeout(Integer ackTimeout) {
         this.ackTimeout = ackTimeout;
     }
 
-    public int getBatchSize() {
+    public Integer getBatchSize() {
         return batchSize;
     }
 
-    public void setBatchSize(int batchSize) {
+    public void setBatchSize(Integer batchSize) {
         this.batchSize = batchSize;
     }
 
-    public int getMaxRetrys() {
+    public Integer getMaxRetrys() {
         return maxRetrys;
     }
 
-    public void setMaxRetrys(int maxRetrys) {
+    public void setMaxRetrys(Integer maxRetrys) {
         this.maxRetrys = maxRetrys;
     }
 
-    public int getMaxRetryDelay() {
+    public Integer getMaxRetryDelay() {
         return maxRetryDelay;
     }
 
-    public void setMaxRetryDelay(int maxRetryDelay) {
+    public void setMaxRetryDelay(Integer maxRetryDelay) {
         this.maxRetryDelay = maxRetryDelay;
     }
 
-    public int getRetryDelay() {
+    public Integer getRetryDelay() {
         return retryDelay;
     }
 
-    public void setRetryDelay(int retryDelay) {
+    public void setRetryDelay(Integer retryDelay) {
         this.retryDelay = retryDelay;
     }
 
-    public boolean isUseExponentialBackOff() {
+    public Boolean isUseExponentialBackOff() {
         return useExponentialBackOff;
     }
 
-    public void setUseExponentialBackOff(boolean useExponentialBackOff) {
+    public void setUseExponentialBackOff(Boolean useExponentialBackOff) {
         this.useExponentialBackOff = useExponentialBackOff;
     }
 
-    public double getBackOffMultiplier() {
+    public Double getBackOffMultiplier() {
         return backOffMultiplier;
     }
 
-    public void setBackOffMultiplier(double backOffMultiplier) {
+    public void setBackOffMultiplier(Double backOffMultiplier) {
         this.backOffMultiplier = backOffMultiplier;
     }
 
-    public int getExpireTime() {
+    public Integer getExpireTime() {
         return expireTime;
     }
 
-    public void setExpireTime(int expireTime) {
+    public void setExpireTime(Integer expireTime) {
         this.expireTime = expireTime;
     }
 
-    public int getConcurrent() {
+    public Integer getConcurrent() {
         return concurrent;
     }
 
-    public void setConcurrent(int concurrent) {
+    public void setConcurrent(Integer concurrent) {
         this.concurrent = concurrent;
     }
 
@@ -258,20 +263,28 @@ public class ConsumerConfig extends BaseNsrModel {
         this.filters = filters;
     }
 
-    public void setLimitTps(int limitTps) {
+    public void setLimitTps(Integer limitTps) {
         this.limitTps = limitTps;
     }
 
-    public int getLimitTps() {
+    public Integer getLimitTps() {
         return limitTps;
     }
 
-    public void setLimitTraffic(int limitTraffic) {
+    public void setLimitTraffic(Integer limitTraffic) {
         this.limitTraffic = limitTraffic;
     }
 
-    public int getLimitTraffic() {
+    public Integer getLimitTraffic() {
         return limitTraffic;
+    }
+
+    public String getRegion() {
+        return region;
+    }
+
+    public void setRegion(String region) {
+        this.region = region;
     }
 
     public OffsetMode getOffsetMode() {
@@ -282,4 +295,11 @@ public class ConsumerConfig extends BaseNsrModel {
         this.offsetMode = offsetMode;
     }
 
+    public Map<String, String> getParams() {
+        return params;
+    }
+
+    public void setParams(Map<String, String> params) {
+        this.params = params;
+    }
 }

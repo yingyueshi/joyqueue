@@ -16,12 +16,6 @@
 package org.joyqueue.nsr;
 
 import com.alibaba.fastjson.JSON;
-import org.joyqueue.model.domain.Identity;
-import org.joyqueue.model.domain.OperLog;
-import org.joyqueue.service.OperLogService;
-import org.joyqueue.toolkit.security.EscapeUtils;
-import org.joyqueue.util.HttpUtil;
-import org.joyqueue.util.LocalSession;
 import org.apache.commons.codec.CharEncoding;
 import org.apache.commons.codec.Charsets;
 import org.apache.http.HttpStatus;
@@ -31,6 +25,12 @@ import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.util.EntityUtils;
+import org.joyqueue.model.domain.Identity;
+import org.joyqueue.model.domain.OperLog;
+import org.joyqueue.service.OperLogService;
+import org.joyqueue.toolkit.security.EscapeUtils;
+import org.joyqueue.util.HttpUtil;
+import org.joyqueue.util.LocalSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -111,10 +111,10 @@ public class NameServerBase {
     }
 
     public int isSuccess(String s){
-     if (s.equals("success")) {
-         return 1;
-     }
-     return 0;
+        if (s.equals("success")) {
+            return 1;
+        }
+        return 0;
     }
 
     /**
@@ -133,9 +133,10 @@ public class NameServerBase {
             entity.setContentType(ContentType.APPLICATION_JSON.getMimeType());
             post.setEntity(entity);
         }
-        return onResponse(HttpUtil.executeRequest(post),post);
+        return HttpUtil.request(post);
     }
 
+    @Deprecated
     private String onResponse(CloseableHttpResponse response, HttpUriRequest request) {
         try {
             int statusCode = response.getStatusLine().getStatusCode();

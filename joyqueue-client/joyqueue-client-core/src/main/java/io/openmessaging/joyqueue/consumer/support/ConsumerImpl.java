@@ -15,12 +15,8 @@
  */
 package io.openmessaging.joyqueue.consumer.support;
 
-import org.joyqueue.client.internal.consumer.MessageConsumer;
-import org.joyqueue.client.internal.consumer.domain.ConsumeMessage;
-import org.joyqueue.client.internal.consumer.domain.ConsumeReply;
-import org.joyqueue.client.internal.consumer.domain.FetchIndexData;
-import org.joyqueue.network.command.RetryType;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import io.openmessaging.consumer.BatchMessageListener;
 import io.openmessaging.consumer.MessageListener;
 import io.openmessaging.consumer.MessageReceipt;
@@ -38,6 +34,11 @@ import io.openmessaging.joyqueue.support.AbstractServiceLifecycle;
 import io.openmessaging.message.Message;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.joyqueue.client.internal.consumer.MessageConsumer;
+import org.joyqueue.client.internal.consumer.domain.ConsumeMessage;
+import org.joyqueue.client.internal.consumer.domain.ConsumeReply;
+import org.joyqueue.client.internal.consumer.domain.FetchIndexData;
+import org.joyqueue.network.command.RetryType;
 
 import java.util.Collections;
 import java.util.List;
@@ -75,6 +76,7 @@ public class ConsumerImpl extends AbstractServiceLifecycle implements ExtensionC
         } catch (Throwable cause) {
             throw handleConsumeException(cause);
         }
+
     }
 
     @Override
@@ -308,6 +310,70 @@ public class ConsumerImpl extends AbstractServiceLifecycle implements ExtensionC
     public ConsumerIndex getIndex(short partition) {
         FetchIndexData fetchIndexData = messageConsumer.fetchIndex(partition);
         return new ConsumerIndex(fetchIndexData.getIndex(), fetchIndexData.getLeftIndex(), fetchIndexData.getRightIndex());
+    }
+
+    @Override
+    public void batchAck(List<MessageReceipt> receiptList) {
+        try {
+            List<ConsumeReply> replyList = Lists.newLinkedList();
+            for (MessageReceipt receipt : receiptList) {
+                Preconditions.checkArgument(receipt instanceof MessageReceiptAdapter, "receipt is not supported");
+
+                MessageReceiptAdapter messageReceiptAdapter = (MessageReceiptAdapter) receipt;
+                ConsumeMessage message = messageReceiptAdapter.getMessage();
+                ConsumeReply consumeReply = new ConsumeReply(message.getPartition(), message.getIndex(), RetryType.NONE);
+                replyList.add(consumeReply);
+            }
+
+            messageConsumer.reply(replyList);
+        } catch (Throwable cause) {
+            throw handleConsumeException(cause);
+        }
+    }
+
+    @Override
+    public void commitIndex(short partition, long index) {
+        try {
+            messageConsumer.commitIndex(partition, index);
+        } catch (Throwable cause) {
+            throw handleConsumeException(cause);
+        }
+    }
+
+    @Override
+    public void commitMaxIndex(short partition) {
+        try {
+            messageConsumer.commitMaxIndex(partition);
+        } catch (Throwable cause) {
+            throw handleConsumeException(cause);
+        }
+    }
+
+    @Override
+    public void commitMaxIndex() {
+        try {
+            messageConsumer.commitMaxIndex();
+        } catch (Throwable cause) {
+            throw handleConsumeException(cause);
+        }
+    }
+
+    @Override
+    public void commitMinIndex(short partition) {
+        try {
+            messageConsumer.commitMinIndex(partition);
+        } catch (Throwable cause) {
+            throw handleConsumeException(cause);
+        }
+    }
+
+    @Override
+    public void commitMinIndex() {
+        try {
+            messageConsumer.commitMinIndex();
+        } catch (Throwable cause) {
+            throw handleConsumeException(cause);
+        }
     }
 
     protected OMSRuntimeException handleConsumeException(Throwable cause) {

@@ -76,10 +76,14 @@ public class FetchTopicMessageAckData {
         if (buffers == null) {
             return 0;
         }
-        int size = 0;
+        return buffers.size();
+    }
+
+    public int getTraffic() {
+        int result = 0;
         for (ByteBuffer buffer : buffers) {
-            size += buffer.limit();
+            result += buffer.limit();
         }
-        return size;
+        return result;
     }
 }

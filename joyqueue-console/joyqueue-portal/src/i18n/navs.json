@@ -1,6 +1,11 @@
 {
   "zh-CN": [
     {
+      "name": "login",
+      "path": "/login",
+      "component": "login/login.vue"
+    },
+    {
       "name": "application",
       "path": "/application",
       "component": "application/index.vue"
@@ -61,6 +66,11 @@
           "component": "setting/broker.vue"
         },
         {
+          "path": "brokerMonitor",
+          "name": "brokerMonitor",
+          "component": "setting/brokerMonitor.vue"
+        },
+        {
           "path": "metric",
           "name": "metric",
           "component": "setting/metric.vue"
@@ -69,6 +79,11 @@
           "path": "namespace",
           "name": "namespace",
           "component": "setting/namespace.vue"
+        },
+        {
+          "path": "retryMonitor",
+          "name": "retryMonitor",
+          "component": "setting/retryMonitor.vue"
         }
       ]
     },
@@ -88,14 +103,29 @@
           "component": "tool/operateHistory.vue"
         },
         {
+          "path": "msgFilter",
+          "name": "msgFilter",
+          "component": "tool/messageFilter.vue"
+        },
+        {
           "path": "retry",
           "name": "retry",
           "component": "tool/retry.vue"
+        },
+        {
+          "path": "brokerMigration",
+          "name": "brokerMigration",
+          "component": "tool/brokerMigration.vue"
         }
       ]
     }
   ],
   "en-US": [
+    {
+      "name": "login",
+      "path": "/login",
+      "component": "login/login.vue"
+    },
     {
       "name": "application",
       "path": "/application",
@@ -157,6 +187,11 @@
           "component": "setting/broker.vue"
         },
         {
+          "path": "brokerMonitor",
+          "name": "brokerMonitor",
+          "component": "setting/brokerMonitor.vue"
+        },
+        {
           "path": "metric",
           "name": "metric",
           "component": "setting/metric.vue"
@@ -165,6 +200,11 @@
           "path": "namespace",
           "name": "namespace",
           "component": "setting/namespace.vue"
+        },
+        {
+          "path": "retryMonitor",
+          "name": "retryMonitor",
+          "component": "setting/retryMonitor.vue"
         }
       ]
     },
@@ -184,9 +224,19 @@
           "component": "tool/operateHistory.vue"
         },
         {
+          "path": "msgFilter",
+          "name": "msgFilter",
+          "component": "tool/messageFilter.vue"
+        },
+        {
           "path": "retry",
           "name": "retry",
           "component": "tool/retry.vue"
+        },
+        {
+          "path": "brokerMigration",
+          "name": "brokerMigration",
+          "component": "tool/brokerMigration.vue"
         }
       ]
     }

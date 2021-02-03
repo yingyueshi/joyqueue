@@ -17,10 +17,22 @@ package org.joyqueue.model.domain;
 
 public class ConnectionMonitorInfoWithIp {
 
+
+
+    private long id;
     private String ip;
     private int consumer;
     private int producer;
     private int total;
+    private DataCenter dataCenter;
+
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
+    }
 
     public int getConsumer() {
         return consumer;
@@ -52,5 +64,13 @@ public class ConnectionMonitorInfoWithIp {
 
     public void setIp(String ip) {
         this.ip = ip;
+    }
+
+    public DataCenter getDataCenter() {
+        return dataCenter;
+    }
+
+    public void setDataCenter(DataCenter dataCenter) {
+        this.dataCenter = dataCenter;
     }
 }

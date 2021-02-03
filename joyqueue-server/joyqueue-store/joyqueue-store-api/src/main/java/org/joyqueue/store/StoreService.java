@@ -17,8 +17,10 @@ package org.joyqueue.store;
 
 import org.joyqueue.domain.QosLevel;
 import org.joyqueue.monitor.BufferPoolMonitorInfo;
+import org.joyqueue.store.event.StoreEvent;
 import org.joyqueue.store.replication.ReplicableStore;
 import org.joyqueue.store.transaction.TransactionStore;
+import org.joyqueue.toolkit.concurrent.EventListener;
 
 import java.io.IOException;
 import java.util.List;
@@ -29,8 +31,8 @@ import java.util.List;
  */
 public interface StoreService {
     /**
-     * Partition group 是否存在。
-     * 以Store内存中的元数据为准，有可能和磁盘上的文件不一致。
+     * 判断Partition group 目录是否存在，
+     * 以磁盘上的Partition group目录为准。
      * @param topic Topic
      * @param partitionGroup Partition group
      * @return 存在返回true， 否则返回false
@@ -38,8 +40,8 @@ public interface StoreService {
     boolean partitionGroupExists(String topic, int partitionGroup);
 
     /**
-     * Topic 是否存在
-     * 以Store内存中的元数据为准，有可能和磁盘上的文件不一致。
+     * 判断Topic 目录是否存在，
+     * 以磁盘上的Partition group目录为准。
      * @param topic Topic
      * @return 存在返回true， 否则返回false
      */
@@ -67,9 +69,22 @@ public interface StoreService {
     void removePartitionGroup(String topic, int partitionGroup);
 
     /**
+     * 物理删除已删除的group
+     * @param topic
+     * @param partitionGroup
+     */
+    void physicalDeleteRemovedPartitionGroup(String topic, int partitionGroup);
+
+    /**
+     * 获取已删除的group
+     * @return
+     */
+    List<RemovedPartitionGroupStore> getRemovedPartitionGroups();
+
+    /**
      * 从磁盘恢复partition group，系统启动时调用
      */
-    void restorePartitionGroup(String topic, int partitionGroup);
+    void restorePartitionGroup(String topic, int partitionGroup) throws Exception;
 
     /**
      * 创建PartitionGroup。仅当topic创建或者向topic中添加partitionGroup的时候调用，需要提供节点信息。
@@ -78,7 +93,7 @@ public interface StoreService {
      * @param partitionGroup Partition group
      * @param partitions Partition
      */
-    void createPartitionGroup(String topic, int partitionGroup, short[] partitions);
+    void createPartitionGroup(String topic, int partitionGroup, short[] partitions) throws Exception;
 
     /**
      * 获取{@link PartitionGroupStore} 实例
@@ -134,9 +149,26 @@ public interface StoreService {
     StoreManagementService getManageService();
 
     /**
-     * 获取内存监控
-     * @return
+     * 获取内存监控信息。
+     * @return 内存监控对象。
      */
     BufferPoolMonitorInfo monitorInfo();
 
+    /**
+     * 获取存储节点
+     * @return
+     */
+    StoreNodes getNodes(String topic, int partitionGroup);
+
+    /**
+     * 添加监听器
+     * @param listener
+     */
+    void addListener(EventListener<StoreEvent> listener);
+
+    /**
+     * 移除监听器
+     * @param listener
+     */
+    void removeListener(EventListener<StoreEvent> listener);
 }

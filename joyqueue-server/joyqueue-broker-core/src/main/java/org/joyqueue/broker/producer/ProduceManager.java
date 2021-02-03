@@ -16,6 +16,8 @@
 package org.joyqueue.broker.producer;
 
 import com.google.common.base.Preconditions;
+import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.joyqueue.broker.BrokerContext;
 import org.joyqueue.broker.BrokerContextAware;
 import org.joyqueue.broker.buffer.Serializer;
@@ -44,8 +46,6 @@ import org.joyqueue.toolkit.lang.Close;
 import org.joyqueue.toolkit.metric.Metric;
 import org.joyqueue.toolkit.service.Service;
 import org.joyqueue.toolkit.time.SystemClock;
-import org.apache.commons.lang.ArrayUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -275,7 +275,7 @@ public class ProduceManager extends Service implements Produce, BrokerContextAwa
     private PutResult writeMessages(Producer producer, List<BrokerMessage> msgs, QosLevel qosLevel, long endTime) throws JoyQueueException {
         PutResult putResult = new PutResult();
         String topic = producer.getTopic();
-        List<Short> partitions = clusterManager.getMasterPartitionList(TopicName.parse(topic));
+        List<Short> partitions = clusterManager.getLocalPartitions(TopicName.parse(topic));
         if (partitions == null || partitions.size() == 0) {
             logger.error("no partitions available topic:%s", topic);
             throw new JoyQueueException(JoyQueueCode.CN_NO_PERMISSION);
@@ -299,9 +299,16 @@ public class ProduceManager extends Service implements Produce, BrokerContextAwa
             // 同步等待写入完成
             WriteResult writeResult = syncWait(writeResultFuture, endTime - SystemClock.now());
             // 构造写入结果
-            onPutMessage(topic, producer.getApp(), partitionGroup.getGroup(), startTime, writeRequests);
+            if (writeResult.getCode().equals(JoyQueueCode.SUCCESS)) {
+                onPutMessage(topic, producer.getApp(), partitionGroup.getGroup(), startTime, writeRequests);
+            }
 
             putResult.addWriteResult((short) partitionGroup.getGroup(), writeResult);
+
+            if (config.getLogDetail(producer.getApp())) {
+                logger.info("writeMessages, topic: {}, app: {}, partitionGroup: {}, qosLevel: {}, size: {}, result: {}",
+                        producer.getTopic(), producer.getApp(), partitionGroup.getGroup(), qosLevel, writeRequests.size(), writeResult.getCode());
+            }
         }
 
         return putResult;
@@ -319,7 +326,7 @@ public class ProduceManager extends Service implements Produce, BrokerContextAwa
     private void writeMessagesAsync(Producer producer, List<BrokerMessage> msgs, QosLevel qosLevel, long endTime, EventListener<WriteResult> eventListener) throws JoyQueueException {
         String topic = producer.getTopic();
         String app = producer.getApp();
-        List<Short> partitions = clusterManager.getMasterPartitionList(TopicName.parse(topic));
+        List<Short> partitions = clusterManager.getLocalPartitions(TopicName.parse(topic));
         if (partitions == null || partitions.size() == 0) {
             logger.error("no partitions available topic:%s", topic);
             throw new JoyQueueException(JoyQueueCode.CN_NO_PERMISSION);
@@ -354,7 +361,13 @@ public class ProduceManager extends Service implements Produce, BrokerContextAwa
                 metric.addLatency("async", t1 - t0);
             } else {
                 partitionStore.asyncWrite(event -> {
-                    onPutMessage(topic, app, partitionGroup.getGroup(), startTime, writeRequests);
+                    if (event.getCode().equals(JoyQueueCode.SUCCESS)) {
+                        onPutMessage(topic, app, partitionGroup.getGroup(), startTime, writeRequests);
+                    }
+                    if (config.getLogDetail(producer.getApp())) {
+                        logger.info("writeMessagesAsync, topic: {}, app: {}, partitionGroup: {}, qosLevel: {}, size: {}, result: {}",
+                                producer.getTopic(), producer.getApp(), partitionGroup.getGroup(), qosLevel, writeRequests.size(),event.getCode());
+                    }
                     eventListener.onEvent(event);
                 }, writeRequests.toArray(new WriteRequest[]{}));
             }
@@ -373,6 +386,10 @@ public class ProduceManager extends Service implements Produce, BrokerContextAwa
     }
 
     protected QosLevel getConfigQosLevel(Producer producer, QosLevel qosLevel) {
+        org.joyqueue.domain.Producer.ProducerPolicy producerPolicy = clusterManager.tryGetProducerPolicy(TopicName.parse(producer.getTopic()), producer.getApp());
+        if (producerPolicy != null && producerPolicy.getQosLevel() != null) {
+            return QosLevel.valueOf(producerPolicy.getQosLevel());
+        }
         if (config.getTopicQosLevel(producer.getTopic()) != -1) {
             return QosLevel.valueOf(config.getTopicQosLevel(producer.getTopic()));
         }
@@ -411,7 +428,9 @@ public class ProduceManager extends Service implements Produce, BrokerContextAwa
         public void onEvent(WriteResult event) {
             long elapse = System.nanoTime() - t0;
             metric.addLatency("callback", elapse);
-            onPutMessage(topic, app, partitionGroup, startTime, writeRequests);
+            if (event.getCode().equals(JoyQueueCode.SUCCESS)) {
+                onPutMessage(topic, app, partitionGroup, startTime, writeRequests);
+            }
             eventListener.onEvent(event);
         }
     }

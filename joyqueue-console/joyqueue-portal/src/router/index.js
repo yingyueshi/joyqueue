@@ -122,6 +122,10 @@ routes = routes.concat([{
   path: '*',
   redirect: '/error',
   hidden: true
+}, {
+  path: '/login',
+  name: 'login',
+  redirect: {name: `/${i18n.locale}/login`}
 }])
 
 const router = new Router({
@@ -161,8 +165,12 @@ router.beforeEach((to, from, next) => {
 
           if (loginUserName) { // 其次判断是否有权访问
             goNext(to, from, next, loginUserRole)
+          } else if (to.path.endsWith('/login')) {
+            next()
           } else {
-            location.href = 'https://ssa.jd.com/sso/login?ReturnUrl' + window.location.href
+            next({
+              path: '/login'
+            })
           }
         })
       } else {

@@ -159,6 +159,9 @@
         <route inherit="get"
                path="/v1/dataCenter/findAll" handlers="dataCenter#findAll render"
                errors="error"/>
+        <route inherit="post"
+               path="/v1/dataCenter/findByIps" handlers="dataCenter#findByIps render"
+               errors="error"/>
 
         <!--topic 主题 操作 post-id -->
         <route inherit="post"
@@ -183,6 +186,20 @@
         <route inherit="post"
                path="/v1/topic/unsubscribed/search" handlers="topic#searchUnsubscribed render"
                errors="error"/>
+        <route inherit="post"
+               path="/v1/topic/findByBroker" handlers="topic#findByBroker render"
+               errors="error"/>
+
+        <!--topic message filter-->
+        <route inherit="post"
+               path="/v1/topic/findTopicMsgFilters" handlers="topicMsgFilter#findTopicMsgFilters render"
+               errors="error"/>
+        <route inherit="post"
+               path="/v1/topic/addTopicMsgFilter" handlers="topicMsgFilter#addTopicMsgFilter render"
+               errors="error"/>
+        <route inherit="get"
+               path="/v1/topic/validateAppToken/:app/:topic/:token" handlers="topicMsgFilter#validateAppToken render"
+               errors="error"/>
 
         <!--BrokerGroup Broker分组 操作-->
         <route inherit="post"
@@ -205,6 +222,9 @@
                errors="error"/>
         <route inherit="put"
                path="/v1/brokerGroup/updateBroker/:id" handlers="validateAdmin brokerGroup#updateBroker render"
+               errors="error"/>
+        <route inherit="post"
+               path="/v1/brokerGroup/mvBatchBrokerGroup" handlers="validateAdmin brokerGroup#mvBatchBrokerGroup render"
                errors="error"/>
 
         <!--partitionGroup 操作-->
@@ -255,10 +275,19 @@
                path="/v1/partitionGroupReplica/searchBrokerToScale" handlers="partitionGroupReplica#searchBrokerToScale render"
                errors="error"/>
         <route inherit="post"
+               path="/v1/partitionGroupReplica/searchBrokerToScaleDefault" handlers="partitionGroupReplica#searchBrokerToScaleDefault render"
+               errors="error"/>
+        <route inherit="post"
                path="/v1/partitionGroupReplica/searchBrokerToAddNew" handlers="partitionGroupReplica#searchBrokerToAddNew render"
                errors="error"/>
         <route inherit="post"
+               path="/v1/partitionGroupReplica/searchBrokerToAddNewDefault" handlers="partitionGroupReplica#searchBrokerToAddNewDefault render"
+               errors="error"/>
+        <route inherit="post"
                path="/v1/partitionGroupReplica/leader" handlers="partitionGroupReplica#leader render"
+               errors="error"/>
+        <route inherit="get"
+               path="/v1/broker/findPartitionGroupReplica/:brokerId" handlers="partitionGroupReplica#findPartitionGroupReplica render"
                errors="error"/>
 
         <!-- producer post-id -->
@@ -275,6 +304,9 @@
         <route inherit="get"
                path="/v1/producer/weight/:id" handlers="producer#weight render"
                errors="error"/>
+        <route inherit="post"
+               path="/v1/producer/updateWeight/:id" handlers="producer#updateWeight render"
+               errors="error"/>
 
         <route inherit="post"
                path="/v1/producer/add" handlers="producer#add render"
@@ -285,10 +317,13 @@
         <route inherit="delete"
                path="/v1/producer/delete/:id" handlers="producer#delete render"
                errors="error"/>
+        <route inherit="post"
+               path="/v1/producer/query-by-topic" handlers="producer#query-by-topic render"
+               errors="error"/>
 
         <!-- producerConfig -->
         <route inherit="post"
-               path="/v1/producer/config/addOrUpdate" handlers="addOrUpdateProducerConfig render"
+               path="/v1/producer/config/addOrUpdate" handlers="producer#configAddOrUpdate render"
                errors="error"/>
 
         <!-- consumer post-id -->
@@ -297,6 +332,12 @@
                errors="error"/>
         <route inherit="get"
                path="/v1/consumer/get/:id" handlers="consumer#get render"
+               errors="error"/>
+        <route inherit="get"
+               path="/v1/consumer/checkRegion" handlers="consumer#checkRegion render"
+               errors="error"/>
+        <route inherit="get"
+               path="/v1/consumer/updateRegion" handlers="consumer#updateRegion render"
                errors="error"/>
         <!--<route inherit="get"-->
                <!--path="/v1/consumer/syncMqttClient" handlers="consumer#syncMqttClient render"-->
@@ -309,11 +350,14 @@
                errors="error"/>
         <route inherit="delete"
                path="/v1/consumer/delete/:id" handlers="consumer#delete render"/>
+        <route inherit="post"
+               path="/v1/consumer/queryByTopic" handlers="consumer#queryByTopic render"
+               errors="error"/>
 
         <route inherit="get"
                path="/v1/consumer/findAllSubscribeGroups" handlers="consumer#findAllSubscribeGroups render"/>
         <route inherit="get"
-               path="/v1/consumer/findAppsByTopic/topic/:topic" handlers="consumer#findAppsByTopic render"/>
+               path="/v1/consumer/findAppsByTopic" handlers="consumer#findAppsByTopic render"/>
 
         <!-- consumer Config -->
         <route inherit="post"
@@ -338,6 +382,10 @@
 
         <!-- monitor -->
         <route inherit="post"
+               path="/v1/monitor/remove/connections" handlers="brokerMonitor#removeConnections render"
+               errors="error"/>
+
+        <route inherit="post"
                path="/v1/monitor/find" handlers="brokerMonitor#find render"
                errors="error"/>
 
@@ -354,7 +402,9 @@
         <route inherit="post"
                path="/v1/monitor/find/partitionGroupDetailForTopicApp" handlers="brokerMonitor#findMonitorOnPartitionGroupDetailForTopicApp render"
                errors="error"/>
-
+        <route inherit="get"
+               path="/v1/monitor/broker/findBrokerDetail/:brokerId" handlers="brokerMonitor#findBrokerDetail render"
+               errors="error"/>
         <route inherit="post"
                path="/v1/monitor/find/broker" handlers="brokerMonitor#findOnBroker render"
                errors="error"/>
@@ -398,15 +448,21 @@
         <route inherit="post"
                path="/v1/monitor/broker/partition/search" handlers="brokerMonitor#partitionGroupMonitor render"
                errors="error"/>
+        <route inherit="post"
+               path="/v1/monitor/broker/group/metric" handlers="brokerMonitor#findPartitionGroupMetric render"
+               errors="error"/>
         <route inherit="get"
                path="/v1/monitor/broker/:brokerId" handlers="brokerMonitor#findBrokerDetail render"
+               errors="error"/>
+        <route inherit="get"
+               path="/v1/monitor/findTopicCount" handlers="brokerMonitor#findTopicCount render"
                errors="error"/>
         <route inherit="get"
                path="/v1/monitor/start/:brokerId" handlers="brokerMonitor#startInfo render"
                errors="error"/>
 
         <route inherit="get"
-               path="/v1/monitor/broker/metadata/:brokerId/:topicFullName/:group" handlers="brokerMonitor#findBrokerMetadata render"
+               path="/v1/monitor/broker/metadata" handlers="brokerMonitor#findBrokerMetadata render"
                errors="error"/>
 
         <route inherit="get"
@@ -415,9 +471,9 @@
         <route inherit="delete"
                path="/v1/manage/broker/garbageFile" handlers="brokerMonitor#garbageFile render"
                errors="error"/>
-
-
-
+        <route inherit="post"
+               path="/v1/monitor/producer/sendMessage" handlers="brokerMonitor#sendMessage render"
+               errors="error"/>
 
         <!--metric -->
         <route inherit="post"
@@ -440,7 +496,7 @@
                errors="error"/>
         <!--同步操作 -->
         <route inherit="post"
-               path="/v1/sync/application" handlers="syncApp render"
+               path="/v1/sync/application" handlers="syncApplication#syncApp render"
                errors="error"/>
         <route inherit="post"
                path="/v1/sync/user" handlers="syncUser render"
@@ -502,13 +558,13 @@
                path="/v1/retry/search" handlers="retry#search render"
                errors="error"/>
         <route inherit="delete"
-               path="/v1/retry/delete/:id/topic/:topic" handlers="retry#delete render"
+               path="/v1/retry/delete" handlers="retry#delete render"
                errors="error"/>
         <route inherit="put"
-               path="/v1/retry/recovery/:id/topic/:topic" handlers="retry#recovery render"
+               path="/v1/retry/recovery" handlers="retry#recovery render"
                errors="error"/>
         <route inherit="get"
-               path="/v1/retry/download/:id/topic/:topic" handlers="retry#download render"
+               path="/v1/retry/download" handlers="retry#download render"
                errors="error"/>
         <route inherit="get"
                path="/v1/retry/isServerEnabled" handlers="retry#isServerEnabled render"
@@ -517,18 +573,38 @@
                path="/v1/retry/batchDelete" handlers="retry#batchDelete render"
                errors="error"/>
 
+        <route inherit="delete"
+               path="/v1/retry/cleanup/consumer" handlers="retry#cleanupConsumerRetry render"
+               errors="error"/>
+
+        <route inherit="delete"
+               path="/v1/retry/cleanup/allConsumer" handlers="retry#cleanupAllConsumerRetry render"
+               errors="error"/>
+
+        <route inherit="get"
+               path="/v1/retry/monitor/search" handlers="retry#retryMonitor render"
+               errors="error"/>
+
+
         <!-- archive -->
         <route inherit="post"
-               path="/v1/archive/search" handlers="archive#search render"
+               path="/v1/archive/search" handlers="validateTopic archive#search render"
                errors="error"/>
         <!--<route inherit="delete"-->
         <!--path="/v1/archive/delete/:id" handlers="archive#delete render"-->
         <!--errors="error"/>-->
+
+        <route inherit="get"
+               path="/v1/archive/message-types" handlers="archive#message-types render"
+               errors="error"/>
         <route inherit="post"
                path="/v1/archive/retry" handlers="archive#retry render"
                errors="error"/>
         <route inherit="get"
                path="/v1/archive/download" handlers="archive#download render"
+               errors="error"/>
+        <route inherit="get"
+               path="/v1/archive/preview" handlers="archive#preview render"
                errors="error"/>
         <route inherit="get"
                path="/v1/archive/consume/:id" handlers="archive#consume render"
@@ -539,7 +615,7 @@
 
         <!--用户登录 登出 -->
         <route inherit="get"
-               path="/v1/login/user" handlers="getLoginUser render"
+               path="/v1/login/user" handlers="AdminLogin getLoginUser render"
                errors="error"/>
         <!--grafana web-->
         <route inherit="get"
@@ -551,7 +627,19 @@
         <route inherit="get"
                path="/v1/grafana/getRedirectUrl/:uid" handlers="grafana#getRedirectUrl render"
                errors="error"/>
-
+        <!-- migration -->
+        <route inherit="post"
+               path="/v1/migration/analysis" handlers="migrationTask#analysis render"
+               errors="error"/>
+        <route inherit="post"
+               path="/v1/migration/add" handlers="migrationTask#add render"
+               errors="error"/>
+        <route inherit="post"
+               path="/v1/migration/search" handlers="migrationTask#search render"
+               errors="error"/>
+        <route inherit="get"
+               path="/v1/migrationSubjob/getByMigrationId/:migrationId" handlers="migrationSubjob#getByMigrationId render"
+               errors="error"/>
 
     </routes>
 

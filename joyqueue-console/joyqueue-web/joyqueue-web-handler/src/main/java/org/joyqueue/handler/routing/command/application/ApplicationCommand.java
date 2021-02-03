@@ -20,11 +20,11 @@ import com.jd.laf.web.vertx.annotation.Path;
 import com.jd.laf.web.vertx.annotation.QueryParam;
 import com.jd.laf.web.vertx.response.Response;
 import com.jd.laf.web.vertx.response.Responses;
+import org.joyqueue.handler.Constants;
 import org.joyqueue.handler.annotation.PageQuery;
 import org.joyqueue.handler.error.ConfigException;
 import org.joyqueue.handler.error.ErrorCode;
 import org.joyqueue.handler.routing.command.CommandSupport;
-import org.joyqueue.handler.Constants;
 import org.joyqueue.model.ListQuery;
 import org.joyqueue.model.PageResult;
 import org.joyqueue.model.QPageQuery;
@@ -37,6 +37,8 @@ import org.joyqueue.service.ApplicationService;
 import org.joyqueue.service.UserService;
 
 import javax.validation.constraints.NotNull;
+
+import static org.joyqueue.handler.Constants.ID;
 
 /**
  * Created by wangxiaofei1 on 2018/10/19.
@@ -91,7 +93,7 @@ public class ApplicationCommand extends CommandSupport<Application,ApplicationSe
     }
 
     @Path("setOwner")
-    public Response setOwner(@QueryParam(Constants.ID) Long id, @QueryParam(Constants.USER_ID) Long userId) throws Exception {
+    public Response setOwner(@QueryParam(ID) Long id, @QueryParam(Constants.USER_ID) Long userId) throws Exception {
         Application application = service.findById(id);
         User user = userService.findById(userId);
         application.setOwner(new Identity(user.getId(), user.getCode()));

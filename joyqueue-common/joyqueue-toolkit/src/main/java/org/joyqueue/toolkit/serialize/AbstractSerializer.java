@@ -73,7 +73,7 @@ public abstract class AbstractSerializer {
      * @param escapeUnicode 转移Unicode标示
      */
     protected static void append(final StringBuilder builder, final String value, final boolean escapeSpace,
-                               final boolean escapeUnicode) {
+                                 final boolean escapeUnicode) {
         int len = value.length();
         for (int x = 0; x < len; x++) {
             char aChar = value.charAt(x);
@@ -227,6 +227,18 @@ public abstract class AbstractSerializer {
         properties.load(new StringReader(text));
 
         return new HashMap(properties);
+    }
+
+    public static String readString(final byte[] bytes) {
+        return bytes == null ? null : readString(bytes, 0, bytes.length);
+    }
+
+    public static String readString(byte[] bytes, int offset, int length) {
+        if (bytes == null) {
+            return null;
+        } else {
+            return length == 0 ? "" : new String(bytes, offset, length, Charset.forName("UTF-8"));
+        }
     }
 
     /**

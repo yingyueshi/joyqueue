@@ -21,6 +21,7 @@ import org.joyqueue.domain.TopicConfig;
 import org.joyqueue.response.BooleanResponse;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * MetadataMonitorService
@@ -38,6 +39,14 @@ public interface MetadataMonitorService {
      * @return 主题元数据
      */
     TopicConfig getTopicMetadata(String topic, boolean isCluster);
+
+    /**
+     * 重建主题元数据
+     *
+     * @param topic 主题
+     * @return 主题元数据
+     */
+    TopicConfig rebuildTopicMetadata(String topic);
 
     /**
      * 是否有读权限
@@ -140,7 +149,16 @@ public interface MetadataMonitorService {
      * 返回所有配置元数据
      * @return
      */
-    List<String> getConfigsMetadata();
+    Map<String, String> getConfigsMetadata();
+
+    /**
+     * 更新配置
+     * @param key
+     * @param group
+     * @param value
+     * @return
+     */
+    String updateConfigMetadata(String key, String group, String value);
 
     /**
      * 查询集群信息
