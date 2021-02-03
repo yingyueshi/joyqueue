@@ -18,6 +18,7 @@ public class MigrationReport extends BaseModel {
         this.type = type;
         this.topicCode = topicCode;
         this.namespaceCode = namespaceCode;
+        this.pgNo = pgNo;
         this.type = type;
     }
 

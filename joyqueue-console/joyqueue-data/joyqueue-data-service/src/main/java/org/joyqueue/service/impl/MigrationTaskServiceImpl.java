@@ -105,6 +105,7 @@ public class MigrationTaskServiceImpl extends PageServiceSupport<MigrationTask, 
                     }
                     break;
                 default:
+                    topicNames = allTopics;
                     break;
             }
 
@@ -165,8 +166,8 @@ public class MigrationTaskServiceImpl extends PageServiceSupport<MigrationTask, 
                 return "没有发现异常";
             }
         } catch (Exception e) {
-            logger.error("分析过程内部异常.", e);
-            throw new NotFoundException("分析过程内部异常", e);
+            logger.error("分析/创建过程内部异常.", e);
+            throw new BusinessException("分析/创建过程内部异常", e);
         }
 
     }
@@ -217,7 +218,7 @@ public class MigrationTaskServiceImpl extends PageServiceSupport<MigrationTask, 
     public String convertReport(List<MigrationReport> reports) {
         return reports.stream().collect(Collectors.groupingBy(MigrationReport::getType,
                 Collectors.mapping(MigrationReport::getPgDescriptor, Collectors.joining(","))))
-                .entrySet().stream().map(entry -> entry.getKey().value() + ": " + entry.getValue() + ".")
+                .entrySet().stream().map(entry -> entry.getKey().description() + ": " + entry.getValue() + ".")
                 .collect(Collectors.joining("\n"));
     }
 
