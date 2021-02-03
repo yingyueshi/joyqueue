@@ -30,6 +30,8 @@ public class MigrationTask extends BaseModel {
 
     private int srcBrokerId;
 
+    private String srcBrokerIp;
+
     private boolean removeFirst;
 
     private List<MigrationTarget> targets;
@@ -39,6 +41,14 @@ public class MigrationTask extends BaseModel {
     private ScopeType scopeType;
 
     private String scopes;
+
+    public String getSrcBrokerIp() {
+        return srcBrokerIp;
+    }
+
+    public void setSrcBrokerIp(String srcBrokerIp) {
+        this.srcBrokerIp = srcBrokerIp;
+    }
 
     public int getSrcBrokerId() {
         return srcBrokerId;

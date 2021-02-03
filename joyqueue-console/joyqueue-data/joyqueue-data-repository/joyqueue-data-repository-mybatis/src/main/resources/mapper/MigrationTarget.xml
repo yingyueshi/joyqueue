@@ -9,6 +9,7 @@
 		<result property="id" column="id" jdbcType="BIGINT"/>
 		<result property="migrationId" column="migration_id" jdbcType="BIGINT"/>
 		<result property="brokerId" column="broker_id" jdbcType="BIGINT"/>
+		<result property="brokerIp" column="broker_ip" jdbcType="VARCHAR"/>
 		<result property="weight" column="weight" jdbcType="TINYINT"/>
 		<result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
 		<result property="createBy.id" column="create_by" jdbcType="BIGINT"/>
@@ -22,6 +23,7 @@
           INSERT INTO migration_target(
             migration_id,
             broker_id,
+            broker_ip,
             weight,
             `create_time`,
             create_by,
@@ -32,6 +34,7 @@
           VALUES(
             #{migrationId},
             #{brokerId},
+            #{brokerIp},
             #{weight},
             #{createTime},
             #{createBy.id},
@@ -48,6 +51,7 @@
         SET
            `migration_id` = #{migrationId},
            `broker_id` = #{brokerId},
+           `broker_ip` = #{brokerIp},
            `weight` = #{weight},
            `update_by`=#{updateBy.id},
            `update_time`=#{updateTime}
@@ -74,6 +78,7 @@
 		t.id,
 		t.migration_id,
 		t.broker_id,
+		t.broker_ip,
 		t.weight,
 		t.create_time,
 		t.create_by,
