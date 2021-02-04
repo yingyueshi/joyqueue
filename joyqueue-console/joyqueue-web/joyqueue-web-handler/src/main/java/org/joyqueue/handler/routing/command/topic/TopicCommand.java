@@ -23,6 +23,7 @@ import com.jd.laf.web.vertx.response.Response;
 import com.jd.laf.web.vertx.response.Responses;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.joyqueue.domain.TopicName;
 import org.joyqueue.handler.annotation.PageQuery;
 import org.joyqueue.handler.error.ConfigException;
 import org.joyqueue.handler.error.ErrorCode;
@@ -125,13 +126,36 @@ public class TopicCommand extends NsrCommandSupport<Topic, TopicService, QTopic>
     }
 
     @Path("findByBroker")
-    public Response findByBroker(@Body TopicKeyword topicKeyword) {
+    public Response findByBroker(@Body @PageQuery QPageQuery<TopicKeyword> qTopic) {
         try {
-            if (StringUtils.isEmpty(topicKeyword.getBrokerId())) {
+            if (StringUtils.isEmpty(qTopic.getQuery().getBrokerId())) {
                 return Responses.error(HTTP_BAD_REQUEST, HTTP_BAD_REQUEST, "BrokerId不能为空！");
             }
-            return Responses.success(service.findTopic(topicKeyword.getBrokerId()).stream().filter(topicName ->
-                    topicName.getCode().contains(topicKeyword.getKeyword())).collect(Collectors.toList()));
+            PageResult<TopicName> result = new PageResult<>();
+            result.setPagination(qTopic.getPagination());
+            String brokerId = qTopic.getQuery().getBrokerId();
+            String keyWord = qTopic.getQuery().getKeyword();
+            List<TopicName> topicNames = service.findTopic(brokerId).stream().filter(topicName ->
+                    topicName.getCode().contains(keyWord)).collect(Collectors.toList());
+            int start;
+            int end;
+            int page;
+
+            if (topicNames.size() <= qTopic.getPagination().getStart()) {
+                start = 0;
+                end = Math.min(topicNames.size(), qTopic.getPagination().getSize());
+                page = 1;
+            } else {
+                start = qTopic.getPagination().getStart();
+                end = Math.min(topicNames.size(), qTopic.getPagination().getStart() + qTopic.getPagination().getSize());
+                page = qTopic.getPagination().getPage();
+            }
+            result.getPagination().setStart(start);
+            result.getPagination().setPage(page);
+            result.getPagination().setTotalRecord(topicNames.size());
+            List<TopicName> pageTopics = topicNames.subList(start, end);
+            result.setResult(pageTopics);
+            return Responses.success(result);
         } catch (Exception e) {
             return Responses.error(e);
         }
