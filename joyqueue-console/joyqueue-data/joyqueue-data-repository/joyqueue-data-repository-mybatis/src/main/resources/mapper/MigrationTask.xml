@@ -8,6 +8,7 @@
 	<resultMap id="baseResultMap" type="MigrationTask">
 		<result property="id" column="id" jdbcType="BIGINT"/>
 		<result property="srcBrokerId" column="src_broker_id" jdbcType="BIGINT"/>
+		<result property="srcBrokerIp" column="src_broker_ip" jdbcType="VARCHAR"/>
 		<result property="removeFirst" column="remove_first" jdbcType="TINYINT"/>
 		<result property="scopeType" column="scope_type" jdbcType="VARCHAR"/>
 		<result property="scopes" column="scopes" jdbcType="VARCHAR"/>
@@ -22,6 +23,7 @@
        <![CDATA[
           INSERT INTO migration_task(
             src_broker_id,
+            src_broker_ip,
             remove_first,
             scope_type,
             scopes,
@@ -33,6 +35,7 @@
             )
           VALUES(
             #{srcBrokerId},
+            #{srcBrokerIp},
             #{removeFirst},
             #{scopeType},
             #{scopes},
@@ -50,6 +53,7 @@
             migration_task
         SET
            `src_broker_id` = #{srcBrokerId},
+           `src_broker_ip` = #{srcBrokerIp},
            `remove_first` = #{removeFirst},
            `scope_type` = #{scopeType},
            `scopes` = #{scopes},
@@ -77,6 +81,7 @@
 		SELECT
 			t.id,
 			t.src_broker_id,
+			t.src_broker_ip,
 			t.remove_first,
 			t.scope_type,
 			t.scopes,
@@ -85,7 +90,7 @@
 			t.update_time,
 			t.update_by,
 			t.status,
-			(SELECT GROUP_CONCAT(CONVERT(m.broker_id,char)) FROM migration_target m WHERE m.migration_id = t.id) AS targetsStr
+			(SELECT GROUP_CONCAT(CONVERT(m.broker_ip,char)) FROM migration_target m WHERE m.migration_id = t.id) AS targetsStr
 		FROM migration_task AS t
 	</sql>
 

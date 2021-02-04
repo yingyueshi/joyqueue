@@ -6,7 +6,16 @@ public class MigrationTarget extends BaseModel {
 
     private long migrationId;
     private int brokerId;
+    private String brokerIp;
     private int weight;
+
+    public String getBrokerIp() {
+        return brokerIp;
+    }
+
+    public void setBrokerIp(String brokerIp) {
+        this.brokerIp = brokerIp;
+    }
 
     public long getMigrationId() {
         return migrationId;
